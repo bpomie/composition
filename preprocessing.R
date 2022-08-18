@@ -6,27 +6,27 @@ library(tidyverse)
 # TRAINING PHASE ================================================
 
 # Set the path
-setwd("~/Documents/GitHub/compositionworking/data/training/")
+setwd("~/Documents/GitHub/composition/data/training/")
 
 #Experiment 1
 my_files <- list.files(pattern = "^e1t") #Get file names of individual data files
 listExcel = lapply(my_files, read_excel) # Read each excel file into a list
 de1 = do.call(rbind.data.frame, listExcel) %>% # Concatenate the data in each file into one combined data frame
-  mutate(experiment = "Exp1")
+  mutate(experiment = "Experiment 1")
 rm(listExcel)
 
 #Experiment 2
 my_files <- list.files(pattern = "^e2t")
 listExcel = lapply(my_files, read_excel)
 de2 = do.call(rbind.data.frame, listExcel) %>%
-  mutate(experiment = "Exp2")
+  mutate(experiment = "Experiment 2")
 rm(listExcel)
 
 #Experiment 3
 my_files <- list.files(pattern = "^e3t")
 listExcel = lapply(my_files, read_excel)
 de3 = do.call(rbind.data.frame, listExcel) %>%
-  mutate(experiment = "Exp3")
+  mutate(experiment = "Experiment 3")
 rm(listExcel)
 
 d <- rbind(de1,de2,de3) 
@@ -117,18 +117,18 @@ d <- d %>%
                             ),1,0))) %>%
   mutate(att = ifelse(is.na(gazex) == F | is.na(gazey) == F,1,0)) 
 
-# Compute AOI hits
+# Save
 
 save(d,file = "../datatraining.RData")
 
 # TEST PHASE ================================================
 
-setwd("~/Documents/GitHub/compositionworking/data/test/")
+setwd("~/Documents/GitHub/composition/data/test/")
 
 # EXP1 ====
 
 # Set the path
-setwd('~/Documents/GitHub/compositionworking/data/test/')
+setwd('~/Documents/GitHub/composition/data/test/')
 #Get file names of individual data files
 my_files <- list.files(pattern = "^e1_")
 # Read each excel file into a list
@@ -187,6 +187,7 @@ save(d,file = "../datateste1.RData")
 
 # Read in the data
 
+setwd("~/Documents/GitHub/composition/data/test/")
 my_files <- list.files(pattern = "^e2_")
 listExcel = lapply(my_files, read_excel)
 d2 = do.call(rbind.data.frame, listExcel)
@@ -199,10 +200,9 @@ d2[d2==9999] <- NA
 d2[d2==0] <- NA
 
 d2 <- d2 %>%
-  filter(trial > 6) %>%
   mutate(ID = as.numeric(ID))
 
-# Define AOIs =====
+# Define AOIs
   aoilu = c(375,5,900,520) #aoilu = c(375,5,900,575)
   aoild = c(375,560,900,1075) #aoild = c(375,625,900,1195)
   aoird = c(1020,560,1545,1075) #aoird = c(1020,625,1545,1195)
@@ -281,12 +281,11 @@ d2 <- d2 %>%
     mutate(experiment = "Experiment 2")
 
   save(dcompose,file = "../datateste2.RData")
-  #save(dkind,file = "../datakindteste2.RData")
 
 # EXP3 ====
 
   # Read in the data
-  
+  setwd("~/Documents/GitHub/composition/data/test/")
   my_files <- list.files(pattern = "^e3_")
   listExcel = lapply(my_files, read_excel)
   d3 = do.call(rbind.data.frame, listExcel)
@@ -298,7 +297,6 @@ d2 <- d2 %>%
   d3[d3==0] <- NA
   
   d3 <- d3 %>%
-    filter(trial > 6) %>%
     mutate(ID = as.numeric(ID))
   
   # Define AOIs 
@@ -384,5 +382,5 @@ d2 <- d2 %>%
   # KIND RECOGNITON ====
   dkind <- rbind(dkind2,dkind3)
   
-  save(dkind, file = "../datakindrecognition.RData")
+  save(dkind, file = "../datacategoryrecognition.RData")
   

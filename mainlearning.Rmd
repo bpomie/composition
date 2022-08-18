@@ -1,0 +1,235 @@
+---
+title: "Main analyses E1. Language processing reveals conceptual combination in preverbal infants"
+author: "BP"
+output: html_document
+---
+
+```{r}
+library(readxl)
+library(tidyverse)
+library(ggpubr)
+library(rstatix)
+library(scales)
+library(lsr)
+```
+
+# DATA
+
+```{r}
+setwd("~/Documents/GitHub/composition/data/") # Set the path
+load("dataattendteste1.RData") # Load the raw data
+```
+
+# RESULTS
+
+```{r}
+# Compute ptl, corrptl
+results <- d %>%
+  group_by(ID,trial,phase,targetnumeral,attpretest,atttest,atttrial) %>%
+  summarise(tg = sum(tghit,na.rm=T),
+            dt = sum(dthit,na.rm=T),
+            ct = sum(centerhit,na.rm=T),
+            ptl = tg/(tg+dt)) %>%
+  select(ID,trial,phase,targetnumeral,ptl,attpretest,atttest,atttrial) %>%
+  pivot_wider(names_from=phase,values_from=ptl) %>%
+  mutate(corrptl=test-pretest)
+```
+
+
+
+# STATS
+
+## Descriptive
+
+### Individual means
+
+```{r}
+# Compute individual means
+resultsindm <- results %>%
+  filter(atttrial != 0) %>%
+  group_by(ID) %>%
+  summarise(mpre=mean(pretest,na.rm=T),mtest = mean(test,na.rm=T), mcorrptl = mean(corrptl,na.rm=T),n()) 
+```
+
+```{r}
+# Compute individual means
+resultsindmnum <- results %>%
+  filter(atttrial != 0) %>%
+  group_by(ID,targetnumeral) %>%
+  summarise(mpre=mean(pretest,na.rm=T),mtest = mean(test,na.rm=T), mcorrptl = mean(corrptl,na.rm=T),n()) 
+```
+
+### Group means
+
+#### Overall
+
+```{r}
+resultsindm %>% # all participants
+  summarise(gmpre=mean(mpre),gmtest = mean(mtest), gmcorrptl = mean(mcorrptl,na.rm=T),n())
+
+resultsindm %>%
+  get_summary_stats(mcorrptl,type="mean_sd")
+```
+
+#### By quantity label
+
+```{r}
+resultsindmnum %>%
+  group_by(targetnumeral) %>%
+  get_summary_stats(mcorrptl,type="mean_sd")
+```
+
+
+## Normality
+
+```{r}
+shapiro.test(resultsindm$mcorrptl)
+```
+
+## Main inferential
+
+```{r}
+t.test(resultsindm$mcorrptl, mu = 0, alternative = "two.sided")
+cohensD(resultsindm$mcorrptl, mu = 0)
+```
+
+### Binomial
+
+```{r}
+binom.test(15,20, p = 0.5, alternative = "two.sided", conf.level = 0.95)
+```
+
+## Exploratory
+
+Test wheter corrpl_target differes acress qunatity labeles (single vs. pair).
+
+```{r}
+t.test(data = resultsindmnum, mcorrptl~targetnumeral, paired= T,alternative = "two.sided")
+cohensD(data = resultsindmnum, mcorrptl~targetnumeral)
+```
+
+
+Test whether PTL differs from chance at pretest, test.
+
+```{r}
+t.test(resultsindm$mpre, mu = 0.5, alternative = "two.sided")
+t.test(resultsindm$mtest, mu = 0.5, alternative = "two.sided")
+```
+
+# PLOTS
+
+```{r}
+cbp1 <- c("#009E73", "#E69F00", "#56B4E9", "#000000",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+cbp2 <- c("#009E73", "#E69F00", "#56B4E9", "#999999",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+```
+
+## Boxplots
+
+```{r}
+resultsindm %>%
+  ggplot(aes(x=1,y=mcorrptl)) +
+  theme_pubr() +
+  theme(legend.position = "none",
+        title = element_text(size = 16),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 12),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  geom_hline(yintercept = 0, size = .5, lty = "longdash", color = "gray") +
+  geom_boxplot(outlier.shape = NA, alpha = .5, width = .3,
+               color="gray10",size =.35, fill = "#009E73") +
+  geom_jitter(position=position_jitter(.15), size = .75, color = "#009E73") +
+  ylim(-.56,.56) +
+  ylab("Mean Baseline-Corrected Proportion of Looking") +
+  xlim(0,2) +
+  stat_summary(fun.y = mean, na.rm = TRUE,
+               geom = "point", color = "white", 
+               size = 4, shape = "diamond") +
+  labs(title = "Experiment 1", subtitle = "Generalization test") 
+
+setwd("~/Documents/GitHub/composition/plots/") # Set the path
+ggsave("boxe1.png", plot = last_plot(), width = 10, height = 10, units = c("cm"))
+```
+
+## Time-course plots
+
+```{r}
+dctime <- merge(d,results,by=c("ID","trial","targetnumeral","atttrial","attpretest","atttest"))
+```
+
+```{r}
+dctime %>%
+  filter(atttrial == 1) %>%
+  mutate(ptg = tghit/(tghit+dthit)) %>%
+  mutate(corrtg = ptg-pretest) %>%
+  group_by(ID,phase,sample) %>%
+  summarise(tcorrptl = mean(corrtg,na.rm=T)) %>%
+  group_by(phase,sample) %>%
+  summarise(tcorrtg = mean(tcorrptl,na.rm=T)) %>%
+  gather(key="aoi",value = "corr",c("tcorrtg")) %>%
+  ggplot(aes(x=sample,y=corr,color=aoi)) +
+  geom_line() +
+  ylim(-.5,.5) +
+  facet_wrap(phase ~ .)
+```
+
+Baseline-corrected plots.
+
+```{r}
+aux <- dctime %>%
+  ungroup() %>%
+  filter(atttrial == 1) %>%
+  filter(phase == "test")
+
+l = nrow(aux)
+
+auxctime <- dctime %>%
+  filter(atttrial == 1) %>%
+  filter(phase == "test")%>%
+  mutate(samplegroup = rep(1:130,each=3,l/390))%>%
+  mutate(sumaoi=tghit+dthit) %>%
+  mutate(ptg = tghit/sumaoi) %>%
+  mutate(corrtg = ptg-pretest) %>%
+  group_by(ID,samplegroup) %>%
+  summarise(tcorrptl = mean(corrtg,na.rm=T)) %>%
+  group_by(samplegroup) %>%
+  get_summary_stats(tcorrptl, type="mean_se")
+```
+
+```{r}
+auxctime %>%
+  ggplot(aes(x=samplegroup,y=mean,color="#009E73")) +
+  theme_pubr() +
+  theme(legend.position = "none",
+        title = element_text(size = 16),
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_blank()) +
+  geom_vline(xintercept = 30, size=.15, color="black") +
+  geom_vline(xintercept = 240/390*130, size=.15, color="black") +
+  geom_hline(yintercept = 0, size=.15, color="black") +
+  geom_errorbar(aes(ymin = mean-se, ymax = mean+se),alpha=.25) +
+  geom_line() +
+  ylim(-.56,.56) +
+  xlab("Time (seconds)") +
+  scale_x_continuous(
+    breaks = c(1,61/390*130,121/390*130,181/390*130,241/390*130,301/390*130,360/390*130),
+                     labels = c("0","1", "2", "3", "4", "5","6")) +
+  scale_colour_manual(values=cbp2)
+```
+
+```{r warning=FALSE}
+setwd("~/Documents/GitHub/composition/plots/") # Set the path
+ggsave("timee1.png", plot = last_plot(), width = 10, height = 8, units = c("cm"))
+```
+
+# SAVE
+
+```{r}
+setwd("~/Documents/GitHub/composition/results/") # Set the path
+save(resultsindm,resultsindmnum, file = "resultse1.RData")
+```

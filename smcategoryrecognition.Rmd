@@ -1,0 +1,359 @@
+---
+title: "Supplementary analysis E2-3: Kind recognition"
+author: "BP"
+output: html_document
+---
+
+```{r}
+library(readxl)
+library(tidyverse)
+library(ggpubr)
+library(rstatix)
+```
+
+```{r warning=FALSE}
+setwd("~/Documents/GitHub/composition/data/") # Set the path
+load("datacategoryrecognition.Rdata")
+```
+
+```{r}
+dkind <- dkind %>%
+  filter(ifelse(experiment == "Experiment 2", !ID %in% c(2,10), !ID %in% c(3,7))) 
+```
+
+# ATTENTION
+
+## Trial counts
+```{r}
+attentionkind <- dkind %>%
+  group_by(experiment,ID,trial,phase) %>%
+  summarise(totalatt = sum(att, na.rm=T),
+            dur = n(),
+            propatt = totalatt/dur) %>%
+  select(-totalatt,-dur) %>%
+  pivot_wider(names_from=phase,values_from=propatt) %>%
+  mutate(attkind = ifelse(pretest >= .6 & test >= .6,1,0))
+
+attentionkind %>% # Count the excluded trials
+  group_by(experiment,ID) %>%
+  filter(attkind == 1) %>%
+  summarise(validtrialcount = n()) %>%
+  group_by(experiment) %>%
+  get_summary_stats(validtrialcount, type = "mean_sd")
+
+attentionkind %>% # Count the included trials
+  group_by(experiment) %>%
+  filter(attkind == 1) %>%
+  summarise(validtrialcount = n())
+```
+
+```{r}
+colnames(attentionkind) <- c("experiment", "ID","trial","attpretest","atttest","atttrial")
+auxkind <- merge(dkind,attentionkind,by=c("experiment","ID","trial"))
+```
+
+# RESULTS
+
+```{r}
+resultskind <- auxkind %>%
+  group_by(experiment,ID,trial,kind,phase,targetnumeral,attpretest,atttest,atttrial) %>%
+  summarise(tg = sum(tghit,na.rm=T),
+            dt = sum(dtnumhit,na.rm=T),
+            ct = sum(centerhit,na.rm=T),
+            ptl = tg/(tg+dt)) %>%
+  select(experiment,ID,trial,phase,targetnumeral,ptl,attpretest,atttest,atttrial) %>%
+  pivot_wider(names_from=phase,values_from=ptl) %>%
+  mutate(trialvalidity = ifelse(is.na(pretest)==T|is.na(test)==T,0,1)) %>%
+  mutate(corrptl=test-pretest)
+```
+
+Descriptive statistics.
+```{r}
+resultskindindm <- resultskind %>% # Compute individual means
+  filter(ifelse(experiment == "Experiment 2", !ID %in% c(2,10), !ID %in% c(3,7))) %>% # E2
+  filter(atttrial == 1 & trialvalidity == 1) %>%
+  group_by(experiment,ID) %>%
+  summarise(mpre=mean(pretest,na.rm=T),
+            mtest = mean(test,na.rm=T),
+            mcorrptl = mean(corrptl,na.rm=T),
+            n()) %>%
+  mutate(kindknower = ifelse(mcorrptl > 0,1,0))
+
+#resultskind <- merge(resultskind,resultskindindm, by = c("experiment","ID")) #Add kind score to the non-averaged results
+
+resultskindindm %>%
+  ungroup() %>%
+  get_summary_stats(mcorrptl, type = "mean_sd")
+```
+
+Results split by kind.
+```{r}
+resultskindindmsplit <- resultskind %>% # Compute individual means
+  filter(ifelse(experiment == "Experiment 2", !ID %in% c(2,10), !ID %in% c(3,7))) %>% # E2
+  filter(atttrial == 1 & trialvalidity == 1) %>%
+  group_by(experiment,ID,kind) %>%
+  summarise(mpre=mean(pretest,na.rm=T),
+            mtest = mean(test,na.rm=T),
+            mcorrptl = mean(corrptl,na.rm=T),
+            n()) %>%
+  mutate(kindknower = ifelse(mcorrptl > 0,1,0))
+```
+
+
+# PLOTS
+
+```{r}
+library(PupillometryR)
+```
+
+```{r}
+cbp3 <- c(
+          "#0072B2", "#D55E00", "#CC79A7",
+          "#E69F00", "#56B4E9", "#000000", "#009E73")
+```
+
+## Boxplot
+
+```{r}
+pos <- position_jitter(width = .15, seed = 1)
+resultskindindm %>%
+  #group_by(kindknower) %>%
+  ggplot(aes(x = 1, y = mcorrptl)) +
+  theme_pubr() +
+  theme(legend.position = "none",
+        legend.title = element_blank(),
+        legend.text = element_text(size = 12),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 16, face = "bold"),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank()) +
+  geom_boxplot(width = .1) +
+  geom_jitter(aes(y = mcorrptl, color = as.factor(experiment)), width = .04, alpha = .5) +
+  geom_hline(yintercept = 0, size = .05) +
+  #geom_flat_violin(aes(fill = as.factor(experiment),color = experiment),position = position_nudge(x = .1), alpha = 0.3, width = .35, size = .15) +
+  xlim(.7,1.4) +
+  #ylim(-.55, .55) +
+  ylim(-1,1) +
+  ylab("corrPL") +
+  guides(color=guide_legend(nrow=2, byrow=TRUE)) +
+  scale_colour_manual(values=cbp3) +
+  scale_fill_manual(values=cbp3) +
+  stat_summary(fun.y = mean, na.rm = TRUE,
+               geom = "point", color = "black", 
+               size = 4, shape = "diamond") 
+
+setwd("~/Documents/GitHub/composition/plots/") # Set the path
+ggsave("categorybox.png", plot = last_plot(), width = 10, height = 15, units = c("cm"))
+```
+
+Split by kind.
+
+```{r}
+pos <- position_jitter(width = .15, seed = 1)
+resultskindindmsplit %>%
+  #group_by(kindknower) %>%
+  ggplot(aes(x = as.factor(kind), y = mcorrptl, fill = kind)) +
+  theme_pubr() +
+  theme(legend.position = "bottom",
+        legend.title = element_blank(),
+        legend.text = element_text(size = 12),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 16, face = "bold"),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank()) +
+  geom_boxplot(alpha = .1) +
+  geom_jitter(aes(y = mcorrptl, color = as.factor(kind)), width = .04, alpha = .5) +
+  geom_hline(yintercept = 0, size = .05) +
+  #geom_flat_violin(aes(fill = as.factor(experiment),color = experiment),position = position_nudge(x = .1), alpha = 0.3, width = .35, size = .15) +
+  #xlim(.7,1.4) +
+  #ylim(-.55, .55) +
+  ylim(-1,1) +
+  ylab("corrPL") +
+  guides(color=guide_legend(nrow=2, byrow=TRUE)) +
+  scale_colour_manual(values=cbp3) +
+  scale_fill_manual(values=cbp3) +
+  stat_summary(fun.y = mean, na.rm = TRUE,
+               geom = "point", color = "black", 
+               size = 4, shape = "diamond") 
+
+setwd("~/Documents/GitHub/composition/plots/") # Set the path
+ggsave("categoryboxsplitbykind.png", plot = last_plot(), width = 10, height = 15, units = c("cm"))
+```
+
+
+
+## Time course
+
+```{r}
+dctime <- merge(dkind,resultskind, by = c("experiment", "ID", "trial"))
+```
+
+```{r}
+aux <- dctime %>%
+  ungroup() %>%
+  filter(atttrial == 1) %>%
+  filter(phase == "test")
+
+l = nrow(aux)
+
+auxctime <- dctime %>%
+  ungroup() %>%
+  filter(atttrial == 1) %>%
+  filter(phase == "test") %>%
+  mutate(samplegroup = rep(1:70,each=3,l/210)) %>%
+  mutate(sumaoi=tghit+dtnumhit) %>%
+  mutate(ptg = tghit/sumaoi) %>%
+  mutate(corrtg = ptg-test) 
+
+auxplot <- auxctime %>%
+  group_by(experiment,ID,samplegroup) %>%
+  summarise(tcorrptl = mean(corrtg,na.rm=T)) %>%
+  group_by(samplegroup) %>%
+  get_summary_stats(tcorrptl, type="mean_se")
+
+auxplotexp <- auxctime %>%
+  group_by(experiment,ID,samplegroup) %>%
+  summarise(tcorrptl = mean(corrtg,na.rm=T)) %>%
+  group_by(experiment,samplegroup) %>%
+  get_summary_stats(tcorrptl, type="mean_se")
+```
+
+```{r}
+auxplot %>%
+  ggplot(aes(x=samplegroup,y=mean)) +
+  theme_pubr() +
+  theme(legend.position = "none",
+        title = element_text(size = 16),
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(size = 16, face="bold")) +
+  geom_hline(yintercept = 0, size=.15, color="black") +
+  geom_errorbar(aes(ymin = mean-se, ymax = mean+se),alpha=.25) +
+  geom_line(data=auxplotexp, aes(x = samplegroup, y = mean, color = experiment), alpha = .7) +
+  geom_line() +
+  ylim(-.56,.56) +
+  xlab("Time (seconds)") +
+  ylab("corrpl") +
+  scale_x_continuous(
+    breaks = c(1,61/390*130,121/390*130,181/390*130),
+                     labels = c("0","1", "2", "3")) +
+  scale_colour_manual(values=cbp3)
+
+setwd("~/Documents/GitHub/composition/plots/") # Set the path
+ggsave("categorytime.png", plot = last_plot(), width = 20, height = 16, units = c("cm"))
+```
+
+
+# STATS
+
+## Descriptive
+
+```{r}
+resultskindindm %>%
+  get_summary_stats(mcorrptl, type = "mean_sd")
+```
+
+
+## Normality
+
+```{r}
+shapiro.test(resultskindindm$mcorrptl[resultskindindm$experiment=="Experiment 2"])
+shapiro.test(resultskindindm$mcorrptl[resultskindindm$experiment=="Experiment 3"])
+```
+
+```{r}
+shapiro.test(resultskindindm$mcorrptl)
+```
+
+
+## Frequentist 
+
+```{r}
+library(afex)
+```
+
+### Preliminary
+```{r}
+resultskindindm <- resultskindindm %>%
+  ungroup() %>%
+  mutate(countID = group_indices_(resultskindindm, .dots=c("experiment", "ID"))) %>%
+  mutate(experiment = as.factor(experiment))
+
+ares<-aov_car((mcorrptl ~ experiment 
+                + Error(countID) + experiment), 
+  data = resultskindindm)
+
+summary(ares)
+```
+
+### Main
+```{r}
+t.test(resultskindindm$mpre, mu = 0.5, alternative = "two.sided")
+t.test(resultskindindm$mtest, mu = 0.5, alternative = "two.sided")
+t.test(resultskindindm$mcorrptl, mu = 0, alternative = "two.sided")
+```
+
+### Exploratory
+
+On the data split by experiment.
+
+```{r}
+t.test(resultskindindm$mcorrptl[resultskindindm$experiment=="Experiment 2"], mu = 0, alternative = "two.sided")
+```
+
+```{r}
+t.test(resultskindindm$mcorrptl[resultskindindm$experiment=="Experiment 3"], mu = 0, alternative = "two.sided")
+```
+
+# SAVE
+```{r}
+setwd("~/Documents/GitHub/composition/results/") # Set the path
+save(resultskindindm, file = "resultskindrecognition.RData")
+```
+
+## Screen attendance
+
+```{r}
+attkindinfo <- merge(attentionkind, resultskindindm, by=c("experiment","ID"),all=T)
+```
+
+```{r}
+attkindinfo %>%
+  filter(atttrial == 1) %>%
+  filter(kindknower == 1) %>%
+  group_by(experiment) %>%
+  summarise(trialcount = n())
+
+attkindinfo %>%
+  filter(atttrial == 1) %>%
+  filter(kindknower == 1) %>%
+  group_by(experiment, ID) %>%
+  summarise(trialcount = n()) %>%
+  group_by(experiment) %>%
+  get_summary_stats(trialcount, type = "mean_sd")
+```
+ 
+```{r}
+attkindinfo %>%
+  filter(atttrial == 1) %>%
+  #filter(kindknower == 1) %>%
+  group_by(experiment,ID) %>%
+  summarise(mattpre = mean(attpretest),
+            matttest = mean(atttest)) %>%
+  gather(key = "phase", value = "propatt", c("mattpre","matttest")) %>%
+  group_by(phase) %>%
+  get_summary_stats(propatt, type = "mean_sd")
+
+attkindinfo %>%
+  filter(atttrial == 1) %>%
+  #filter(kindknower == 1) %>%
+  group_by(experiment,ID) %>%
+  summarise(mattpre = mean(attpretest),
+            matttest = mean(atttest)) %>%
+  gather(key = "phase", value = "propatt", c("mattpre","matttest")) %>%
+  group_by(experiment,phase) %>%
+  get_summary_stats(propatt, type = "mean_sd")
+```
+
+ 
