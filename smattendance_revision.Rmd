@@ -1,22 +1,28 @@
 ---
-title: "Supplementary analyses. Language processing reveals conceptual combination in preverbal infants"
+title: "Supplementary analyses. Early-emerging combinatorial thought: human infants flexibly combine kind and quantity concepts"
 author: "BP"
 output: html_document
 ---
 
 # LIBRARIES
 ```{r}
-#library(xlsx)
 library(tidyverse)
 library(ggpubr)
 library(rstatix)
 ```
 
+## Paths
+
 ```{r warning=FALSE}
-home_dir <- Sys.getenv("USERPROFILE")
+home_dir <- Sys.getenv("HOME")
 path <- file.path(home_dir, "Documents", "GitHub", "composition", "data")
 pathresults <- file.path(home_dir, "Documents", "GitHub", "composition", "results")
 ```
+
+```{r}
+attThreshold = 0.6
+```
+
 
 # TRAINING E1-3
 
@@ -30,61 +36,64 @@ str(d)
 'attlabeling': [0: less than 50% on-screen data during labeling; 1: 50% or more data during labeling]
 Trials on which infants provided less than 50% on-screen data during labeling were excluded from further analysis.
 
-## Labeling
+## Introduction (overall)
 
-Compute attendance during the labeling phase of the training trials.
+Training trials, compute screen attendance during: (1) the quantity label introduction phase (overall).
 
 ```{r}
-auxatt <- d %>%
+auxtrain1 <- d %>% # screen attendance during the labeling phase of the training trials
   group_by(experiment,countID,ID,trial) %>%
   filter(!phase %in% c("pretest","test")) %>%
   summarise(totalatt = sum(att, na.rm=T),
             dur = n(), #duration in samples
-            propattlabeling = totalatt/dur) %>%
-  mutate(attlabeling = ifelse(propattlabeling >= .5,1,0))
+            propAttIntro = totalatt/dur) %>%
+  mutate(validIntro = ifelse(propAttIntro >= .5,1,0))
 
-head(auxatt)
+head(auxtrain1)
 ```
 
-## Naming & Test
+## Introduction (labeling) & Question (baseline, response)
 
-Compute attendance during: (1) the naming events (labeling phase), (2) pretest/baseline (question phase), (3) test (question phase).
+Training trials, compute screen attendance during: (1) the labeling events (quantity label introduction phase), (2) pretest/baseline (question phase), (3) test/response (question phase).
+
 
 ```{r}
-auxattname <- d %>%
+auxtrain2 <- d %>%
   filter(phase %in% c("name1","name2","pretest","test")) %>%
   group_by(experiment,countID,ID,trial,phase) %>%
   summarise(totalatt = sum(att, na.rm=T),
             dur = n(),
-            propatt = totalatt/dur) %>%
+            propAtt = totalatt/dur) %>%
   select(-dur,-totalatt) %>%
-  pivot_wider(names_from = phase,values_from = c(propatt)) %>%
-  mutate(attname = ifelse(name1 >= .6 & name2 >= .6,1,0)) %>%
-  mutate(atttest = ifelse(pretest >= .6 & test >= .6,1,0))
+  pivot_wider(names_from = phase,values_from = c(propAtt)) %>%
+  mutate(validIntroLabeling = ifelse(name1 >= .6 & name2 >= .6,1,0)) %>%
+  mutate(validQuestion = ifelse(pretest >= .6 & test >= .6,1,0))
 
-head(auxattname)
+head(auxtrain2)
 ```
 
 ## Summary
 
 ```{r}
-attention <- merge(auxatt,auxattname,by=c("experiment","countID","ID","trial")) %>%
-  mutate(inclusion = ifelse(attname == 1 & attlabeling == 1,1,0))
+attentionTraining <- merge(auxtrain1,auxtrain2,by=c("experiment","countID","ID","trial")) %>%
+  mutate(validTraining = ifelse(validIntro == 1 & validIntroLabeling == 1,1,0))
+
+head(attentionTraining)
 ```
 
 ```{r}
-rm(auxatt)
-rm(auxattname)
+rm(auxtrain1)
+rm(auxtrain2)
 ```
 
 ## Exclusions
 
 Identify participants who provided less than 3 valid training trials.
 ```{r}
-attention %>%
+attentionTraining %>%
   group_by(experiment, ID, countID) %>%
-  summarise(validtrialcount = sum(inclusion)) %>%
-  filter(validtrialcount < 3)
+  summarise(totalValidTrainingTrials = sum(validTraining)) %>%
+  filter(totalValidTrainingTrials < 3)
 ```
 
 Exclude participants who provided less than 3 valid training trials.
@@ -94,22 +103,26 @@ d <- d %>%
 ```
 
 ```{r}
-attention <- attention %>%
+attentionTraining <- attentionTraining %>%
   filter(!countID %in% c(22,30,54,58))
 ```
 
+Merge.
+
 ```{r}
-d <- merge(d, attention, by = c("experiment","countID","ID","trial"))
+d <- merge(d, attentionTraining, by = c("experiment","countID","ID","trial"))
 ```
 
 ## Save the data
 
 ```{r warning=FALSE}
 setwd("~/Documents/GitHub/composition/data/") # Set the path
-save(d,file = "dataattendtraining.RData")
+save(d,file = "dataTrainingAttendance.RData")
 ```
 
 ## Trial count
+
+Load the results of the category recognition test in Exps 2-3.
 
 ```{r}
 setwd(pathresults) # Set the path
@@ -122,38 +135,46 @@ resultskindindm <- resultskindindm %>%
 ```
 
 ```{r}
-attkind <- merge(attention, resultskindindm, by=c("experiment","ID"),all=T)
+aux <- merge(attentionTraining, resultskindindm, by=c("experiment","ID"),all=T)
 ```
 
-### Main
+```{r}
+attentionTraining <- aux
+rm(aux)
+```
+
+
+### Overall
+
+Compute:
+- the total number of valid training trials per experiment,
+- the mean number of valid training trials (+SD) per xperiment.
 
 ```{r}
-attkind %>%
-  filter(inclusion == 1) %>%
+attentionTraining %>%
+  filter(validTraining == 1) %>%
   filter((is.na(kindknower) == T & experiment == "Experiment 1") | kindknower == 1) %>%
   group_by(experiment) %>%
   summarise(trialcount = n())
 
-attkind %>%
-  filter(inclusion == 1) %>%
+attentionTraining %>%
+  filter(validTraining == 1) %>%
   filter((is.na(kindknower) == T & experiment == "Experiment 1") | kindknower == 1) %>%
   group_by(experiment,ID) %>%
   summarise(trialcount = n())%>%
   group_by(experiment) %>%
   get_summary_stats(trialcount, type = "mean_sd")
 ```
-```{r}
-attkind %>%
-  filter(inclusion == 1) %>%
-  filter((is.na(kindknower) == T & experiment == "Experiment 1") | kindknower == 1) %>%
-  group_by(experiment) %>%
-  summarise(trialcount = n())
 
-attkind %>%
-  filter(inclusion == 1) %>%
+Compute the mean proportion of screen attendence during the following parts of the quantity label introduction phase of the training:
+(1) overall, (2) labeling event 1, (3) labeling event 2.
+
+```{r}
+attentionTraining %>%
+  filter(validTraining == 1) %>%
   filter((is.na(kindknower) == T & experiment == "Experiment 1") | kindknower == 1) %>%
   group_by(experiment,ID) %>%
-  summarise(mlabel = mean(propattlabeling,na.rm=T),
+  summarise(mlabel = mean(propAttIntro,na.rm=T),
             mname1 = mean(name1,na.rm=T),
             mname2 = mean(name2,na.rm=T)) %>%
   gather(key = "phase", value = "propatt", c("mlabel","mname1", "mname2")) %>%
@@ -161,33 +182,28 @@ attkind %>%
   get_summary_stats(propatt, type = "mean_sd")
 ```
 
-### Word mapping
+### Word mapping question
 
 ```{r}
-attkind %>%
-  filter(inclusion == 1 & atttest == 1) %>%
+attentionTraining %>%
+  filter(validTraining == 1 & validQuestion == 1) %>%
   filter((is.na(kindknower) == T & experiment == "Experiment 1") | kindknower == 1) %>%
   group_by(experiment) %>%
   summarise(trialcount = n())
 
-attkind %>%
-  filter(inclusion == 1 & atttest == 1) %>%
+attentionTraining %>%
+  filter(validTraining == 1 & validQuestion == 1) %>%
   filter((is.na(kindknower) == T & experiment == "Experiment 1") | kindknower == 1) %>%
   group_by(experiment,ID) %>%
   summarise(trialcount = n())%>%
   group_by(experiment) %>%
   get_summary_stats(trialcount, type = "mean_sd")
 ```
+### Supporting Information
 
 ```{r}
-attkind %>%
-  filter(inclusion == 1 & atttest == 1) %>%
-  filter((is.na(kindknower) == T & experiment == "Experiment 1") | kindknower == 1) %>%
-  group_by(experiment) %>%
-  summarise(trialcount = n())
-
-attkind %>%
-  filter(inclusion == 1 & atttest == 1) %>%
+attentionTraining %>%
+  filter(validTraining == 1 & validQuestion == 1) %>%
   filter((is.na(kindknower) == T & experiment == "Experiment 1") | kindknower == 1) %>%
   group_by(experiment,ID) %>%
   summarise(mpretest = mean(pretest,na.rm=T),
@@ -197,12 +213,11 @@ attkind %>%
   group_by(phase) %>%
   get_summary_stats(propatt, type = "mean_sd")
 
-
-attkind %>%
-  filter(inclusion == 1 & atttest == 1) %>%
+attentionTraining %>%
+  filter(validTraining == 1 & validQuestion == 1) %>%
   filter((is.na(kindknower) == T & experiment == "Experiment 1") | kindknower == 1) %>%
   group_by(experiment,ID) %>%
-  summarise(mlabel = mean(propattlabeling,na.rm=T),
+  summarise(mlabel = mean(propAttIntro,na.rm=T),
             mname1 = mean(name1,na.rm=T),
             mname2 = mean(name2,na.rm=T)) %>%
   gather(key = "phase", value = "propatt", c("mlabel","mname1", "mname2")) %>%
@@ -210,11 +225,11 @@ attkind %>%
   group_by(phase) %>%
   get_summary_stats(propatt, type = "mean_sd")
 
-attkind %>%
-  filter(inclusion == 1 & atttest == 1) %>%
+attentionTraining %>%
+  filter(validTraining == 1 & validQuestion == 1) %>%
   filter((is.na(kindknower) == T & experiment == "Experiment 1") | kindknower == 1) %>%
   group_by(experiment,ID) %>%
-  summarise(mlabel = mean(propattlabeling,na.rm=T),
+  summarise(mlabel = mean(propAttIntro,na.rm=T),
             mname1 = mean(name1,na.rm=T),
             mname2 = mean(name2,na.rm=T)) %>%
   gather(key = "phase", value = "propatt", c("mlabel","mname1", "mname2")) %>%
@@ -231,7 +246,7 @@ load("datateste1.RData") # Load the raw data
 
 ```{r}
 # Screen attendance during the entire training
-attention <- d %>%
+attentionGeneralizationE1 <- d %>%
   group_by(ID,trial,phase) %>%
   mutate(att = ifelse(gazex>0 & gazey>0,1,0)) %>%
   summarise(totalatt = sum(att, na.rm=T),
@@ -239,30 +254,31 @@ attention <- d %>%
             propatt = totalatt/dur) %>%
   select(-totalatt,-dur) %>%
   pivot_wider(names_from=phase,values_from=propatt) %>%
-  mutate(atttrial = ifelse(pretest >= .7 & test >= .7,1,0))
+  mutate(validTrial = ifelse(pretest >= attThreshold & test >= attThreshold,1,0))
 ```
 
 ## Trial counts
 
 Count the included trials.
+
 ```{r}
-attention %>%
+attentionGeneralizationE1 %>%
   ungroup() %>%
-  filter(atttrial == 1) %>%
+  filter(validTrial == 1) %>%
   summarise(n())
 
-attention %>%
+attentionGeneralizationE1 %>%
   group_by(ID) %>%
-  filter(atttrial == 1) %>%
+  filter(validTrial == 1) %>%
   summarise(trialcount = n()) %>%
   ungroup() %>%
   get_summary_stats(trialcount, type = "mean_sd")
 ```
 
 ```{r}
-attention %>%
+attentionGeneralizationE1 %>%
   group_by(ID) %>%
-  filter(atttrial == 1) %>%
+  filter(validTrial == 1) %>%
   summarise(attendancepretest = mean(pretest), attendancetest = mean(test)) %>%
   gather(key = "phase", value = "attendance", c("attendancepretest","attendancetest")) %>%
   group_by(phase) %>%
@@ -272,29 +288,29 @@ attention %>%
 
 ```{r}
 # Preview the excluded trials
-attention %>%
-  filter(atttrial == 0)
+attentionGeneralizationE1 %>%
+  filter(validTrial == 0)
 
 # Count the excluded trials
-attention %>%
+attentionGeneralizationE1 %>%
   group_by(ID) %>%
-  filter(atttrial == 0) %>%
+  filter(validTrial == 0) %>%
   summarise(n())
 ```
 
 ```{r}
-colnames(attention) <- c("ID","trial","attpretest","atttest","atttrial")
-auxgeneralise <- merge(d,attention,by=c("ID","trial"))
+colnames(attentionGeneralizationE1) <- c("ID","trial","propAttBaselineTest","propAttResponseTest","validTrial")
+auxgeneralise <- merge(d,attentionGeneralizationE1,by=c("ID","trial"))
 ```
 
 
 ```{r}
 d <- auxgeneralise
+save(d,file = "dataattendteste1.RData")
+```
 
-setwd(path) # Set the path
-
-#setwd('~Documents\GitHub\composition\data\') # Set the path
-save(d,file = "dataattendteste1_70attendance.RData")
+```{r}
+rm(auxgeneralise)
 ```
 
 
@@ -320,27 +336,45 @@ dcompose <- rbind(d2,d3)
 rm(d2,d3)
 ```
 
+Exclude participants who provided less than 3 valid training trials.
+
 ```{r}
-attentioncompose <- dcompose %>%
+dcompose <- dcompose %>%
+  filter(ifelse(experiment == "Experiment 2", !ID %in% c(2,10), !ID %in% c(3,7))) 
+```
+
+
+```{r}
+attentionCompositionE2E3 <- dcompose %>%
   group_by(experiment,ID,trial,targetnumeral,phase) %>%
   summarise(totalatt = sum(att, na.rm=T),
             dur = n(),
             propatt = totalatt/dur) %>%
   select(-totalatt,-dur) %>%
   pivot_wider(names_from=phase,values_from=propatt) %>%
-  mutate(atttrial = ifelse(pretest >= .7 & test >= .7,1,0))
+  mutate(validTrial = ifelse(pretest >= attThreshold & test >= attThreshold,1,0))
 
-attentioncompose %>% # Excluded trials preview
+attentionCompositionE2E3 %>% # Excluded trials preview
   group_by(experiment,ID,targetnumeral) %>%
-  filter(atttrial == 1) %>%
+  filter(validTrial == 1) %>%
   summarise(trialcount = n()) %>%
   pivot_wider(names_from = targetnumeral, values_from = trialcount) %>%
   mutate(exclusion = ifelse(pair == 0 | single == 0,1,0)) %>%
-  filter(exclusion == 1)
+  filter(exclusion == 0)
 
-colnames(attentioncompose) <- c("experiment", "ID","trial","targetnumeral","attpretest","atttest","atttrial")
-dcompose <- merge(dcompose,attentioncompose,by=c("experiment","ID","trial","targetnumeral"))
+colnames(attentionCompositionE2E3) <- c("experiment", "ID","trial","targetnumeral","propAttBaselineTest","propAttResponseTest","validTrial")
+auxcompose <- merge(dcompose,attentionCompositionE2E3,by=c("experiment","ID","trial","targetnumeral"))
+head(auxcompose)
 ```
+
+```{r}
+dcompose <- auxcompose
+```
+
+```{r}
+rm(auxcompose)
+```
+
 
 ## Trial counts
 
@@ -351,13 +385,13 @@ attkindcompose <- merge(attentioncompose, resultskindindm, by=c("experiment","ID
 
 ```{r}
 attkindcompose %>%
-  filter(atttrial == 1) %>%
+  filter(trialIncluded == 1) %>%
   filter(kindknower == 1) %>%
   group_by(experiment) %>%
   summarise(n())
 
 attkindcompose %>%
-  filter(atttrial == 1) %>%
+  filter(trialIncluded == 1) %>%
   filter(kindknower == 1) %>%
   group_by(experiment,ID) %>%
   summarise(trialcount = n()) %>%
@@ -365,7 +399,7 @@ attkindcompose %>%
   get_summary_stats(trialcount, type = "mean_sd")
 
 attkindcompose %>%
-  filter(atttrial == 1) %>%
+  filter(trialIncluded == 1) %>%
   filter(kindknower == 1) %>%
   group_by(experiment,ID) %>%
   summarise(trialcount = n())
@@ -388,6 +422,7 @@ attkindcompose %>%
   group_by(experiment,phase) %>%
   get_summary_stats(propatt, type = "mean_sd")
 ```
+
 ```{r}
 attkindcompose %>%
   filter(atttrial == 1) %>%
@@ -400,5 +435,5 @@ attkindcompose %>%
 
 ```{r}
 setwd(path) # Set the path
-save(dcompose,file = "dataattendteste2e3_70attendance.RData")
+save(dcompose,file = "dataattendteste2e3.RData")
 ```

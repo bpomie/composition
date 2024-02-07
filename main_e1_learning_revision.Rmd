@@ -17,10 +17,10 @@ library(lsr)
 
 Path, load the data.
 ```{r}
-home_dir <- Sys.getenv("USERPROFILE")
+home_dir <- Sys.getenv("HOME")
 path <- file.path(home_dir, "Documents", "GitHub", "composition", "data")
 setwd(path) # Set the path
-load("dataattendteste1_70attendance.RData") # Load the raw data
+load("dataattendteste1.RData") # Load the raw data
 ```
 
 # RESULTS
@@ -28,12 +28,12 @@ load("dataattendteste1_70attendance.RData") # Load the raw data
 ```{r}
 # Compute ptl, corrptl
 results <- d %>%
-  group_by(ID,trial,phase,targetnumeral,attpretest,atttest,atttrial) %>%
+  group_by(ID,trial,phase,targetnumeral,atttrial) %>%
   summarise(tg = sum(tghit,na.rm=T),
             dt = sum(dthit,na.rm=T),
             ct = sum(centerhit,na.rm=T),
             ptl = tg/(tg+dt)) %>%
-  select(ID,trial,phase,targetnumeral,ptl,attpretest,atttest,atttrial) %>%
+  select(ID,trial,phase,targetnumeral,ptl,atttrial) %>%
   pivot_wider(names_from=phase,values_from=ptl) %>%
   mutate(corrptl=test-pretest)
 ```
@@ -120,14 +120,35 @@ t.test(resultsindm$mtest, mu = 0.5, alternative = "two.sided")
 # PLOTS
 
 ```{r}
-cbp1 <- c("#009E73", "#E69F00", "#56B4E9", "#000000",
+cbp1 <- c("#CC79A7", "gray80", "#0072B2", "#999999",
           "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 
-cbp2 <- c("#009E73", "#E69F00", "#56B4E9", "#999999",
+cbp2 <- c("#CC79A7", "#E69F00", "#0072B2", "#F0E442",
           "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 ```
 
 ## Boxplots
+
+ggplot(aes(x=as.factor(aoi),y=corr,fill=aoi,color = aoi)) +
+  theme_pubr() +
+  theme(legend.position = "none",
+        title = element_text(size = 16),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 12),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  geom_hline(yintercept = 0, size = .5, lty = "longdash", color = "gray") +
+  geom_boxplot(outlier.shape = NA, alpha = 1, width = .5, color = "black", size = .15) +
+  geom_point(size = .75, alpha = .55, position = position_jitter(seed = 1, width = .1), color = "black") +
+  ylim(-.56,.56) +
+  stat_summary(fun.y = mean, na.rm = TRUE,
+               geom = "point", color = "white", 
+               size = 2, shape = "circle") +
+  #labs(title = "Experiment 2", subtitle = "Composition test") +
+  scale_colour_manual(values=cbp2) +
+  scale_fill_manual(values=cbp2) 
+
+### Overall
 
 ```{r}
 resultsindm %>%
@@ -140,25 +161,100 @@ resultsindm %>%
         axis.title.x = element_blank(),
         axis.title.y = element_blank()) +
   geom_hline(yintercept = 0, size = .5, lty = "longdash", color = "gray") +
-  geom_boxplot(outlier.shape = NA, alpha = .5, width = .3,
-               color="gray10",size =.35, fill = "#009E73") +
-  geom_jitter(position=position_jitter(.15), size = .75, color = "#009E73") +
+  geom_boxplot(outlier.shape = NA, alpha = 1, width = .165,
+               color="gray10",size =.35, fill = "#CC79A7") +
+  geom_point(size = .75, alpha = .55, position = position_jitter(seed = 1, width = .175), color = "black") +
   ylim(-.56,.56) +
   ylab("Mean Baseline-Corrected Proportion of Looking") +
   xlim(0,2) +
   stat_summary(fun.y = mean, na.rm = TRUE,
                geom = "point", color = "white", 
-               size = 4, shape = "diamond") +
-  labs(title = "Experiment 1", subtitle = "Generalization test") 
+               size = 2, shape = "circle") 
+  #labs(title = "Experiment 1", subtitle = "Generalization test") 
 
-setwd("~/Documents/GitHub/composition/plots/") # Set the path
-ggsave("boxe1.png", plot = last_plot(), width = 10, height = 10, units = c("cm"))
+overall
 ```
+```{r}
+setwd(pathplots) 
+  ggsave("boxe1.png", plot = last_plot(), width = 7.5, height = 7.5, units = c("cm"))
+```
+
+### Single
+
+```{r}
+a <- resultsindmnum %>%
+  filter(targetnumeral == "single") %>%
+  ggplot(aes(x=1,y=mcorrptl)) +
+  theme_pubr() +
+  theme(legend.position = "none",
+        title = element_text(size = 18),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 20),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  geom_hline(yintercept = 0, size = .5, lty = "longdash", color = "gray") +
+  geom_boxplot(outlier.shape = NA, alpha = .35, width = .55,
+               color="gray10",size =.25, fill = "#CC79A7") +
+  geom_jitter(position=position_jitter(.65), size = .25, color = "black") +
+  ylim(-.56,.56) +
+  xlim(0,2) +
+  ggtitle("One")
+```
+
+### Pair
+
+```{r}
+b <- resultsindmnum %>%
+  filter(targetnumeral == "pair") %>%
+  ggplot(aes(x=1,y=mcorrptl)) +
+  theme_pubr() +
+  theme(legend.position = "none",
+        title = element_text(size = 18),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 12, color = "white"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  geom_hline(yintercept = 0, size = .5, lty = "longdash", color = "gray") +
+  geom_boxplot(outlier.shape = NA, alpha = .35, width = .55,
+               color="gray10",size =.25, fill = "#CC79A7") +
+  geom_jitter(position=position_jitter(.75), size = .25, color = "black") +
+  ylim(-.56,.56) +
+  #ylab("Mean Baseline-Corrected Proportion of Looking") +
+  xlim(0,2) +
+  ggtitle("Two")
+
+b
+```
+
+
+```{r}
+ggarrange(a,b,nrow = 1)
+
+```
+
+
+```{r}
+setwd(pathplots) 
+  ggsave("boxe1Num.png", plot = last_plot(), width = 8, height = 8, units = c("cm"))
+```
+
+###Combine plots
+
+```{r}
+side <- ggarrange(a,b,ncol=1)
+  ggarrange(overall,side, nrow = 1, widths = c(2.5,1.325))
+```
+
+```{r}
+setwd("~/Documents/GitHub/composition/plots/") # Set the path
+ggsave("boxe1_combined.png", plot = last_plot(), width = 10, height = 10, units = c("cm"))
+```
+
 
 ## Time-course plots
 
 ```{r}
-dctime <- merge(d,results,by=c("ID","trial","targetnumeral","atttrial","attpretest","atttest"))
+dctime <- merge(d,results,by=c("ID","trial","targetnumeral","atttrial"))
 ```
 
 ```{r}
@@ -202,30 +298,159 @@ auxctime <- dctime %>%
 
 ```{r}
 auxctime %>%
-  ggplot(aes(x=samplegroup,y=mean,color="#009E73")) +
+  ggplot(aes(x=samplegroup,y=mean,color="#CC79A7",fill="#CC79A7")) +
   theme_pubr() +
   theme(legend.position = "none",
         title = element_text(size = 16),
-        axis.text.x = element_text(size = 12),
-        axis.text.y = element_text(size = 12),
-        axis.title.x = element_text(size = 14),
+        axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 16),
+        axis.title.x = element_text(size = 16),
         axis.title.y = element_blank()) +
   geom_vline(xintercept = 30, size=.15, color="black") +
   geom_vline(xintercept = 240/390*130, size=.15, color="black") +
   geom_hline(yintercept = 0, size=.15, color="black") +
-  geom_errorbar(aes(ymin = mean-se, ymax = mean+se),alpha=.25) +
-  geom_line() +
+  geom_ribbon(aes(ymin = mean-se, ymax = mean+se),alpha=.15, size = 0) +
+  geom_line(size=.75) +
   ylim(-.56,.56) +
   xlab("Time (seconds)") +
   scale_x_continuous(
     breaks = c(1,61/390*130,121/390*130,181/390*130,241/390*130,301/390*130,360/390*130),
                      labels = c("0","1", "2", "3", "4", "5","6")) +
-  scale_colour_manual(values=cbp2)
+  scale_colour_manual(values=cbp2) +
+  scale_fill_manual(values=cbp2)
 ```
 
 ```{r warning=FALSE}
 setwd("~/Documents/GitHub/composition/plots/") # Set the path
-ggsave("timee1.png", plot = last_plot(), width = 10, height = 8, units = c("cm"))
+ggsave("timee1.png", plot = last_plot(), width = 15, height = 10, units = c("cm"))
+```
+
+# REVISION
+
+## pt
+
+```{r}
+results %>%
+  filter(atttrial != 0) %>%
+  group_by(ID) %>%
+  summarise(mpretest = mean(pretest, na.rm = T),
+            mtest = mean(test, na.rm = T)) %>%
+  ungroup() %>%
+  summarise(mpretest = mean(mpretest, na.rm = T),
+            mtest = mean(mtest, na.rm = T)) %>%
+  mutate(mtest-mpretest)
+```
+
+
+```{r}
+e1p <- results %>%
+  filter(atttrial != 0) %>%
+  group_by(ID) %>%
+  summarise(mpretest = mean(pretest, na.rm = T),
+            mtest = mean(test, na.rm = T)) %>%
+  gather(key = "phase", value = "value", c("mpretest","mtest")) %>%
+  ggplot(aes(x = as.factor(phase), y = value, color = "#CC79A7")) +
+  theme_pubr() +
+  theme(legend.position = "none",
+        axis.title = element_blank(),
+        axis.text.y = element_text(size = 16),
+        axis.text.x = element_text(size = 12.5),
+        title = element_text(size = 10)) +
+  geom_jitter(position=position_jitter(.15), size = .96, alpha = .25,color = "#CC79A7") +
+  stat_summary(fun.y = mean, na.rm = TRUE,
+               geom = "point",
+               color = "#CC79A7", 
+               size = 2, shape = "circle",position=position_dodge(width = .75)) +
+  stat_summary(fun.data = mean_cl_normal, na.rm = TRUE,
+               color = "#CC79A7", 
+               size = .5, position=position_dodge(width = .75),geom = "errorbar", width = 0) +  ylim(0,0.8)
+```
+
+## RAW LTimes
+
+```{r}
+resultsraw <- d %>%
+  group_by(ID,trial,phase,atttrial) %>%
+  summarise(sumtg = sum(tghit,na.rm=T)*1000/60/1000,
+            sumdt = sum(dthit,na.rm=T)*1000/60/1000)%>%
+  select(ID,trial,phase,sumtg,sumdt,atttrial) %>%
+  filter(atttrial == 1) %>%
+  group_by(ID,phase) %>%
+  summarise(tg = mean(sumtg, na.rm=T),
+            dt = mean(sumdt, na.rm=T)) %>%
+  gather(key = "aoi", value = "value", c("tg","dt")) %>%
+  mutate(aoi = factor(aoi, levels = c("tg","dt")))
+  mutate(phase = recode(phase, "pretest" = "baseline", "test" = "response"))
+
+View(resultsraw)
+```
+
+```{r}
+e1b <- resultsraw %>%
+  ggplot(aes(x = as.factor(phase), y = value, fill = aoi, color = aoi)) +
+  theme_pubr() +
+  theme(legend.position = "none",
+        axis.title = element_blank(),
+        axis.text.y = element_text(size = 16),
+        axis.text.x = element_text(size = 12.5),
+        title = element_text(size = 18)) +
+  geom_jitter(position=position_jitterdodge(.35), size = .96, alpha = .25) +
+  stat_summary(fun.y = mean, na.rm = TRUE,
+               geom = "point",
+               #color = "black", 
+               size = 2, shape = "circle",position=position_dodge(width = .75)) +
+  stat_summary(fun.data = mean_cl_normal, na.rm = TRUE,
+               #color = "black", 
+               size = .5, position=position_dodge(width = .75),geom = "errorbar", width = 0) +
+  scale_color_manual(values=cbp1) +
+  scale_fill_manual(values=cbp1) +
+  ylim(0,3.15) +
+  ggtitle("Experiment 1")
+```
+
+
+```{r}
+ggarrange(e1b, e1p, ncol = 1)
+```
+
+
+```{r}
+setwd(pathplots)
+ggsave("pl1.png", plot = last_plot(), width = 5.5, height = 15, units = c("cm"))
+```
+
+### by Number
+
+```{r}
+resultsrawnumber <- d %>%
+  group_by(ID,trial,phase,targetnumeral,attpretest,atttest,atttrial) %>%
+  summarise(sumtg = sum(tghit,na.rm=T)*1000/60/1000)%>%
+  select(ID,trial,phase,targetnumeral,sumtg,
+         attpretest,atttest,atttrial) %>%
+  group_by(ID,phase,targetnumeral) %>%
+  summarise(value = mean(sumtg, na.rm=T))
+
+View(resultsrawnumber)
+```
+
+```{r}
+e1rc <- resultsrawnumber %>%
+  ggplot(aes(x = as.factor(phase), y = value, fill = targetnumeral, color = targetnumeral)) +
+  theme_pubr() +
+  theme(legend.position = "none",
+        axis.title = element_blank(),
+        axis.text = element_text(size = 12)) +
+  geom_jitter(position=position_jitterdodge(.2), size = .96, alpha = .65) +
+  stat_summary(fun.y = mean, na.rm = TRUE,
+               geom = "point",
+               color = "black", 
+               size = 2, shape = "circle",position=position_dodge(width = .75)) +
+  stat_summary(fun.data = mean_cl_normal, na.rm = TRUE,
+               color = "black", 
+               size = .5, position=position_dodge(width = .75),geom = "errorbar", width = 0) +
+  scale_color_manual(values=c("red3","purple")) +
+  ylim(0,3.15) + 
+  ggtitle("Experiment 1")
 ```
 
 # SAVE

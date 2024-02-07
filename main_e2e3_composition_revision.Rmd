@@ -18,7 +18,7 @@ library(gghalves)
 
 # DATA
 
-Paths.
+## Paths
 
 ```{r warning=FALSE}
 home_dir <- Sys.getenv("HOME") #("USERPROFILE")
@@ -34,24 +34,31 @@ setwd(path) # Set the path
 load("dataattendteste2e3.RData") # Load the raw data
 ```
 
-```{r}
-dcompose <- dcompose %>%
-  filter(ifelse(experiment == "Experiment 2", !ID %in% c(2,10), !ID %in% c(3,7))) 
-```
-
 Load kind-recognition results.
 ```{r}
 setwd(pathresults) 
 load("resultskindrecognition.RData") 
 ```
 
+```{r}
+dnumber <- dcompose %>%
+  mutate(single = ifelse(targetnumeral == "single",tghit+dtnumhit,dtkindhit+dtkunrelatedhit),
+         pair = ifelse(targetnumeral == "pair",tghit+dtnumhit,dtkindhit+dtkunrelatedhit))
+```
+
+
+```{r}
+head(dcompose)
+```
+
+
 # RESULTS
 
-Compute the proportion of looking at each AOI (target, number distractor, kind distractor, unrelated/mixed distractor).
+Compute the proportion of looking at each potential referent / AOI (target, number distractor, kind distractor, unrelated/mixed distractor).
 
 ```{r}
 resultscompose <- dcompose %>%
-  group_by(experiment,ID,trial,phase,targetnumeral,attpretest,atttest,atttrial) %>%
+  group_by(experiment,ID,trial,phase,targetnumeral,validTrial) %>%
   summarise(tg = sum(tghit,na.rm=T),
             dtnum = sum(dtnumhit,na.rm=T),
             dtkind = sum(dtkindhit,na.rm=T),
@@ -61,18 +68,26 @@ resultscompose <- dcompose %>%
             pnum = dtnum/(tg+dtnum+dtkind+dtunrel),
             pkind = dtkind/(tg+dtnum+dtkind+dtunrel),
             punrel = dtunrel/(tg+dtnum+dtkind+dtunrel)) %>%
-  select(ID,trial,phase,targetnumeral,ptg,pnum,pkind,punrel,attpretest,atttest,atttrial) %>%
+  select(ID,trial,phase,targetnumeral,ptg,pnum,pkind,punrel,validTrial) %>%
   pivot_wider(names_from=phase,values_from=c("ptg","pnum","pkind","punrel")) %>%
   mutate(corrtg=ptg_test-ptg_pretest) %>%
   mutate(corrnum=pnum_test-pnum_pretest) %>%
   mutate(corrkind=pkind_test-pkind_pretest) %>%
   mutate(corrunrel=punrel_test-punrel_pretest)
+
+head(resultscompose)
 ```
 
 ```{r}
 # Combine w/ kind info
-resultscombined <- merge(resultscompose,resultskindindm,by=c("experiment","ID"))
+aux <- merge(resultscompose,resultskindindm,by=c("experiment","ID"))
 ```
+
+```{r}
+resultscompose <- aux
+rm(aux)
+```
+
 
 # STATS
 
@@ -82,8 +97,8 @@ resultscombined <- merge(resultscompose,resultskindindm,by=c("experiment","ID"))
 
 ```{r}
 # Individual means ====
-resultscombinedindm <- resultscombined %>%
-  filter(atttrial != 0) %>%
+resultscomposeAVE <- resultscompose %>%
+  filter(validTrial == 1) %>%
   group_by(experiment,ID,kindknower,mcorrptl) %>%
   summarise(mpretg = mean(ptg_pretest,na.rm=T),
             mprenum = mean(pnum_pretest,na.rm=T),
@@ -97,19 +112,19 @@ resultscombinedindm <- resultscombined %>%
             mcorrnum = mean(corrnum,na.rm=T),
             mcorrkind = mean(corrkind,na.rm=T),
             mcorrun = mean(corrunrel,na.rm=T),
-            n()) 
+            trialcount = n()) 
 ```
 
 ### Group means
 
 ```{r}
-resultscombinedindm %>%
+resultscomposeAVE %>%
   gather(key="aoi",value="mcorr",c("mpretg","mprenum","mprekind","mpreun")) %>%
   filter(kindknower == 1) %>%
   group_by(experiment,aoi) %>%
   get_summary_stats(mcorr, type = "mean_se")
 
-resultscombinedindm %>%
+resultscomposeAVE %>%
   gather(key="aoi",value="mcorr",c("mcorrtg","mcorrnum","mcorrkind","mcorrun")) %>%
   filter(kindknower == 1) %>%
   group_by(experiment,aoi) %>%
@@ -123,8 +138,8 @@ resultscombinedindm %>%
 
 ```{r}
 # Individual means ====
-resultscombinedindm_splitNumeral <- resultscombined %>%
-  filter(atttrial != 0) %>%
+resultscomposeAVE_splitNumeral <- resultscompose %>%
+  filter(validTrial == 1) %>%
   group_by(experiment,ID,kindknower,mcorrptl,targetnumeral) %>%
   summarise(mpretg = mean(ptg_pretest,na.rm=T),
             mprenum = mean(pnum_pretest,na.rm=T),
@@ -138,19 +153,19 @@ resultscombinedindm_splitNumeral <- resultscombined %>%
             mcorrnum = mean(corrnum,na.rm=T),
             mcorrkind = mean(corrkind,na.rm=T),
             mcorrun = mean(corrunrel,na.rm=T),
-            n()) 
+            trialcount = n()) 
 ```
 
 ### Group means
 
 ```{r}
-resultscombinedindm_splitNumeral %>%
+resultscomposeAVE_splitNumeral %>%
   gather(key="aoi",value="mcorr",c("mpretg","mprenum","mprekind","mpreun")) %>%
   filter(kindknower == 1) %>%
   group_by(experiment,aoi,targetnumeral) %>%
   get_summary_stats(mcorr, type = "mean_se")
 
-resultscombinedindm_splitNumeral %>%
+resultscomposeAVE_splitNumeral %>%
   gather(key="aoi",value="mcorr",c("mcorrtg","mcorrnum","mcorrkind","mcorrun")) %>%
   filter(kindknower == 1) %>%
   group_by(experiment,aoi,targetnumeral) %>%
@@ -160,7 +175,7 @@ resultscombinedindm_splitNumeral %>%
 ## Normality
 
 ```{r}
-aux = resultscombinedindm %>%filter(kindknower==1)
+aux = resultscomposeAVE %>%filter(kindknower==1)
 ```
 
 ### E2
@@ -219,8 +234,6 @@ multcomp <- aux %>% gather(key="aoi",value="corr",c("mcorrtg","mcorrnum","mcorrk
   filter(experiment == "Experiment 2") %>%
   convert_as_factor(aoi, ID) %>%
   select(experiment, ID,aoi,corr)
-
-multcomp #%>% sample_n_by(experiment,aoi, size = 1)
 ```
 ```{r}
 comparisons <- list(c("mcorrtg", "mcorrnum"), 
@@ -234,7 +247,7 @@ stat.test <- multcomp %>%
   group_by(experiment) %>%
   pairwise_t_test(
     corr ~ aoi, paired = TRUE, 
-    p.adjust.method = "holm",
+    p.adjust.method = "bonferroni",
     comparisons = comparisons
     ) #%>% select(-df, -statistic, -p) # Remove details
 stat.test
@@ -325,124 +338,42 @@ t.test(aux$mpreun[aux$experiment=="Experiment 3"], mu = .25, alternative = "two.
 
 ```{r}
 cbp1 <- c("#CC79A7", "#E69F00", "#0072B2", "#999999",
+          "#F0E442", "#0072B2", "#E69F00", "#CC79A7")
+
+cbp2 <- c("#CC79A7", "#E69F00", "#0072B2", "#F0E442",
           "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
-
-cbp2 <- c("#009E73", "#E69F00", "#0072B2", "#999999",
-          "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 ```
 
 
 
-## Boxplots
+## BOXPLOTS
 
-### E2
+Prepare E2/E3 data for making the box plots.
 
 ```{r}
-resultscombinedindm %>%
-  gather(key="aoi",value="corr",c("mcorrtg","mcorrnum","mcorrkind","mcorrun")) %>%
-  mutate(aoi = recode(aoi,"mcorrtg" = "aTG","mcorrkind" = "dtkind","mcorrnum" = "dtnum")) %>%
+boxplotE2 <- resultscomposeAVE %>%
   filter(kindknower == 1) %>%
   filter(experiment == "Experiment 2") %>%
-  ggplot(aes(x=as.factor(aoi),y=corr,fill=aoi,color = aoi)) +
-  theme_pubr() +
-  theme(legend.position = "none",
-        title = element_text(size = 16),
-        axis.text.x = element_blank(),
-        axis.text.y = element_text(size = 12),
-        axis.title.x = element_blank(),
-        axis.title.y = element_blank()) +
-  geom_hline(yintercept = 0, size = .5, lty = "longdash", color = "gray") +
-  geom_boxplot(outlier.shape = NA, alpha = 1, width = .35, color = "black", size = .15) +
-  stat_halfeye(adjust = 1.5, justification = -.8, alpha = .2, width = .4, .width = 0, point_colour = NA) +
-  #geom_half_point(
-    ## draw jitter on the left side = "l", 
-    ## control range of jitter range_scale = .35, 
-    ## add some transparency alpha = .55) +
-  geom_point(size = .75, alpha = .55, position = position_jitter(seed = 1, width = .1), color = "black") +
-  #stat_dots(binwidth = .05) +
-  #geom_violin(outlier.shape = NA, alpha = .75, width = .45, color="gray10",size =.35) +
-  #geom_jitter(aes(color = aoi),position=position_jitter(.15), size = 1, alpha = .75) +
-  ylim(-.56,.56) +
-  stat_summary(fun.y = mean, na.rm = TRUE,
-               geom = "point", color = "white", 
-               size = 2, shape = "circle") +
-  labs(title = "Experiment 2", subtitle = "Composition test") +
-  scale_colour_manual(values=cbp1) +
-  scale_fill_manual(values=cbp1) 
-```
-
-```{r}
-setwd(pathplots) 
-ggsave("boxe2.png", plot = last_plot(), width = 10, height = 10, units = c("cm"))
-```
-
-Test.
-
-```{r}
-aux <- resultscombinedindm %>%
-  mutate(targetnumeral = "overall") %>%
-  rbind(resultscombined,resultscombinedindm_splitNumeral) %>%
   gather(key="aoi",value="corr",c("mcorrtg","mcorrnum","mcorrkind","mcorrun")) %>%
-  mutate(aoi = recode(aoi,"mcorrtg" = "aTG","mcorrkind" = "dtkind","mcorrnum" = "dtnum")) %>%
-  filter(kindknower == 1) %>%
-  filter(experiment == "Experiment 2")
-```
+  mutate(aoi = recode(aoi,"mcorrtg" = "target","mcorrkind" = "kind distractor","mcorrnum" = "number distractor", "mcorrun" = "unrelated distractor"),
+         aoi = factor(aoi, levels = c("target","kind distractor","number distractor","unrelated distractor")))
 
-```{r}
-resultscombinedindm %>%
-  mutate(targetnumeral = "overall") %>%
-  rbind(resultscombined,resultscombinedindm_splitNumeral) %>%
+boxplotE3 <- resultscomposeAVE %>%
+  filter(kindknower == 1) %>%
+  filter(experiment == "Experiment 3") %>%
   gather(key="aoi",value="corr",c("mcorrtg","mcorrnum","mcorrkind","mcorrun")) %>%
-  mutate(aoi = recode(aoi,"mcorrtg" = "aTG","mcorrkind" = "dtkind","mcorrnum" = "dtnum")) %>%
-  filter(kindknower == 1) %>%
-  filter(experiment == "Experiment 2") %>%
-  ggplot(aes(x=as.factor(aoi),y=corr,fill=aoi,color = targetnumeral, alpha = targetnumeral)) +
-  theme_pubr() +
-  theme(legend.position = "none",
-        title = element_text(size = 16),
-        axis.text.x = element_blank(),
-        axis.text.y = element_text(size = 12),
-        axis.title.x = element_blank(),
-        axis.title.y = element_blank()) +
-  geom_hline(yintercept = 0, size = .5, lty = "longdash", color = "gray") +
-  geom_boxplot(outlier.shape = NA, alpha = 1, width = .35, color = "black", size = .15) +
-  #stat_halfeye(adjust = 1.5, justification = -.8, alpha = .2, width = .4, .width = 0, point_colour = NA) +
-  #geom_half_point(
-    ## draw jitter on the left side = "l", 
-    ## control range of jitter range_scale = .35, 
-    ## add some transparency alpha = .55) +
-  geom_point(size = .75, alpha = .55, position = position_jitter(seed = 1, width = .1), color = "black") +
-  #stat_dots(binwidth = .05) +
-  #geom_violin(outlier.shape = NA, alpha = .75, width = .45, color="gray10",size =.35) +
-  #geom_jitter(aes(color = aoi),position=position_jitter(.15), size = 1, alpha = .75) +
-  ylim(-.56,.56) +
-  stat_summary(fun.y = mean, na.rm = TRUE,
-               geom = "point", color = "white", 
-               size = 2, shape = "circle") +
-  labs(title = "Experiment 2", subtitle = "Composition test") +
-  scale_colour_manual(values=cbp1) +
-  scale_fill_manual(values=cbp1) 
-```
+  mutate(aoi = recode(aoi,"mcorrtg" = "target","mcorrkind" = "kind distractor","mcorrnum" = "number distractor", "mcorrun" = "mixed distractor"),
+         aoi = factor(aoi, levels = c("target","kind distractor","number distractor","mixed distractor")))
 
-#### Pair
-
-```{r}
-plotsingle <- resultscombinedindm_splitNumeral %>%
-  filter(targetnumeral == "single") %>%
-  filter(kindknower == 1) %>%
-  filter(experiment == "Experiment 2") %>%
+boxplot_numeral <- resultscomposeAVE_splitNumeral %>%
   gather(key="aoi",value="corr",c("mcorrtg","mcorrnum","mcorrkind","mcorrun")) %>%
   mutate(aoi = recode(aoi,"mcorrtg" = "aTG","mcorrkind" = "dtkind","mcorrnum" = "dtnum"))
 ```
 
+### Overall
 
 ```{r}
-resultscombinedindm_splitNumeral %>%
-  filter(targetnumeral == "single") %>%
-  filter(kindknower == 1) %>%
-  filter(experiment == "Experiment 2") %>%
-  gather(key="aoi",value="corr",c("mcorrtg","mcorrnum","mcorrkind","mcorrun")) %>%
-  mutate(aoi = recode(aoi,"mcorrtg" = "aTG","mcorrkind" = "dtkind","mcorrnum" = "dtnum")) %>%
+e2 <- boxplotE3 %>%
   ggplot(aes(x=as.factor(aoi),y=corr,fill=aoi,color = aoi)) +
   theme_pubr() +
   theme(legend.position = "none",
@@ -452,73 +383,99 @@ resultscombinedindm_splitNumeral %>%
         axis.title.x = element_blank(),
         axis.title.y = element_blank()) +
   geom_hline(yintercept = 0, size = .5, lty = "longdash", color = "gray") +
-  geom_boxplot(outlier.shape = NA, alpha = 1, width = .35, color = "black", size = .15) +
-  stat_halfeye(adjust = 1.5, justification = -.8, alpha = .2, width = .4, .width = 0, point_colour = NA) +
-  #geom_half_point(
-    ## draw jitter on the left side = "l", 
-    ## control range of jitter range_scale = .35, 
-    ## add some transparency alpha = .55) +
-  geom_point(size = .75, alpha = .55, position = position_jitter(seed = 1, width = .1), color = "black") +
-  #stat_dots(binwidth = .05) +
-  #geom_violin(outlier.shape = NA, alpha = .75, width = .45, color="gray10",size =.35) +
-  #geom_jitter(aes(color = aoi),position=position_jitter(.15), size = 1, alpha = .75) +
+  geom_boxplot(outlier.shape = NA, alpha = 1, width = .35, color = "black", size = .15,
+               position=position_dodge2(padding=.1)) +
+  geom_point(size = .75, alpha = .55, position = position_jitter(width = .1), color = "black") +
   ylim(-.56,.56) +
   stat_summary(fun.y = mean, na.rm = TRUE,
                geom = "point", color = "white", 
                size = 2, shape = "circle") +
-  labs(title = "Experiment 2", subtitle = "Composition test") +
-  scale_colour_manual(values=cbp1) +
-  scale_fill_manual(values=cbp1) 
+  #labs(title = "Experiment 2", subtitle = "Composition test") +
+  scale_colour_manual(values=cbp2) +
+  scale_fill_manual(values=cbp2)
+
+e2
 ```
 
 ```{r}
 setwd(pathplots) 
-ggsave("boxe2_single.png", plot = last_plot(), width = 10, height = 10, units = c("cm"))
+  ggsave("boxe3.png", plot = last_plot(), width = 7.5, height = 7.5, units = c("cm"))
 ```
 
-### E3
+### Single
 
 ```{r}
-resultscombinedindm %>%
-  gather(key="aoi",value="corr",c("mcorrtg","mcorrnum","mcorrkind","mcorrun")) %>%
-  mutate(aoi = recode(aoi,"mcorrtg" = "aTG","mcorrkind" = "dtkind","mcorrnum" = "dtnum")) %>%
+i1 <- boxplot_numeral %>%
+  filter(targetnumeral == "single") %>%
   filter(kindknower == 1) %>%
-  filter(experiment == "Experiment 3") %>%
-  ggplot(aes(x=as.factor(aoi),y=corr,fill=aoi)) +
+  filter(experiment == "Experiment 2") %>%
+  ggplot(aes(x=as.factor(aoi),y=corr,fill=aoi,color = aoi)) +
   theme_pubr() +
   theme(legend.position = "none",
-        title = element_text(size = 16),
+        title = element_text(size = 18),
         axis.text.x = element_blank(),
-        axis.text.y = element_text(size = 12),
+        axis.text.y = element_text(size = 20),
         axis.title.x = element_blank(),
         axis.title.y = element_blank()) +
   geom_hline(yintercept = 0, size = .5, lty = "longdash", color = "gray") +
-  geom_boxplot(outlier.shape = NA, alpha = .5, width = .6, color="gray10",size =.35) +
-  geom_jitter(aes(color = aoi),position=position_jitter(.15), size = .75) +
+  geom_boxplot(outlier.shape = NA, alpha = .35, width = .4, color = "black", size = .15) +
+  geom_point(size = .75, alpha = .75, position = position_jitterdodge(.15), color = "gray30") +
   ylim(-.56,.56) +
-  #ylab("Mean Baseline-Corrected Proportion of Looking") +
-  stat_summary(fun.y = mean, na.rm = TRUE,
-               geom = "point", color = "white", 
-               size = 4, shape = "diamond") +
-  labs(title = "Experiment 3", subtitle = "Composition test") +
+  labs(title = "One") +
   scale_colour_manual(values=cbp1) +
-  scale_fill_manual(values=cbp1)
+  scale_fill_manual(values=cbp1) 
+```
+
+### Pair
+
+```{r}
+i2 <- boxplot_numeral %>%
+  filter(targetnumeral == "pair") %>%
+  filter(kindknower == 1) %>%
+  filter(experiment == "Experiment 2") %>%
+  ggplot(aes(x=as.factor(aoi),y=corr,fill=aoi,color = aoi)) +
+  theme_pubr() +
+  theme(legend.position = "none",
+        title = element_text(size = 18),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 12, color = "white"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  geom_hline(yintercept = 0, size = .5, lty = "longdash", color = "gray") +
+  geom_boxplot(outlier.shape = NA, alpha = .35, width = .4, color = "black", size = .15) +
+  geom_point(size = .75, alpha = .65, position = position_jitterdodge(.15), color = "gray30") +
+  ylim(-.56,.56) +
+  labs(title = "Two") +
+  scale_colour_manual(values=cbp1) +
+  scale_fill_manual(values=cbp1) 
+```
+
+### Combine
+
+```{r}
+ggarrange(i1,i2,nrow=1)
+```
+
+
+```{r}
+setwd(pathplots) 
+  ggsave("boxe2Num.png", plot = last_plot(), width = 16, height = 8, units = c("cm"))
 ```
 
 ```{r}
-setwd("~/Documents/GitHub/composition/plots/") # Set the path
-ggsave("boxe3.png", plot = last_plot(), width = 10, height = 10, units = c("cm"))
+setwd(pathplots) 
+ggsave("boxe3_combined.png", plot = last_plot(), width = 10, height = 10, units = c("cm"))
 ```
 
 ## Time-course plots
 
 ```{r}
-dctime <- merge(dcompose,resultscombined,by=c("experiment","ID","trial","targetnumeral","atttrial"))
+dctime <- merge(dcompose,resultscompose,by=c("experiment","ID","trial","targetnumeral","validTrial"))
 ```
 
 ```{r}
 dctime %>%
-  filter(atttrial == 1) %>%
+  filter(validTrial == 1) %>%
   filter(experiment == "Experiment 2") %>%
   mutate(ptg = tghit/(tghit+dtnumhit+dtkindhit+dtkunrelatedhit)) %>%
   mutate(pnum = dtnumhit/(tghit+dtnumhit+dtkindhit+dtkunrelatedhit)) %>%
@@ -540,17 +497,18 @@ dctime %>%
   ylim(-.5,.5) +
   facet_wrap(phase ~ kindknower)
 ```
-Baseline-corrected plots.
+
+#### Baseline-corrected plots.
 ```{r}
 aux <- dctime %>%
   ungroup() %>%
-  filter(atttrial == 1) %>%
+  filter(validTrial == 1) %>%
   filter(phase == "test")
 
 l = nrow(aux)
 
 auxctime <- dctime %>%
-  filter(atttrial == 1) %>%
+  filter(validTrial == 1) %>%
   filter(phase == "test") %>%
   mutate(samplegroup = rep(1:130,each=3,l/390))%>%
   mutate(sumaoi=tghit+dtnumhit+dtkindhit+dtkunrelatedhit) %>%
@@ -573,33 +531,38 @@ auxctime <- dctime %>%
   get_summary_stats(corr, type="mean_se")
 ```
 
+
 ```{r}
 auxctime %>%
-  filter(experiment == "Experiment 2") %>%
+  filter(experiment == "Experiment 3") %>%
   filter(kindknower == 1) %>%
-  ggplot(aes(x=samplegroup,y=mean,color=aoi)) +
+  ggplot(aes(x=samplegroup,y=mean,color=aoi,fill = aoi)) +
   theme_pubr() +
   theme(legend.position = "none",
         title = element_text(size = 16),
-        axis.text.x = element_text(size = 12),
-        axis.text.y = element_text(size = 12),
-        axis.title.x = element_text(size = 14),
+        axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 16),
+        axis.title.x = element_text(size = 16),
         axis.title.y = element_blank()) +
   geom_vline(xintercept = 30, size=.15, color="black") +
   geom_vline(xintercept = 240/390*130, size=.15, color="black") +
   geom_hline(yintercept = 0, size=.15, color="black") +
-  geom_errorbar(aes(ymin = mean-se, ymax = mean+se),alpha=.25) +
-  geom_line() +
+  geom_ribbon(aes(ymin = mean-se, ymax = mean+se),alpha=.15,size = 0) +
+  geom_line(size = .75) +
   ylim(-.56,.56) +
   xlab("Time (seconds)") +
   scale_x_continuous(
     breaks = c(1,61/390*130,121/390*130,181/390*130,241/390*130,301/390*130,360/390*130),
                      labels = c("0","1", "2", "3", "4", "5","6")) +
-  scale_colour_manual(values=cbp2)
-
-setwd("~/Documents/GitHub/composition/plots/") # Set the path
-ggsave("timee2.png", plot = last_plot(), width = 10, height = 8, units = c("cm"))
+  scale_colour_manual(values=cbp2) +
+  scale_fill_manual(values=cbp2)
 ```
+
+```{r}
+setwd(pathplots) # Set the path
+ggsave("timee2.png", plot = last_plot(), width = 15, height = 10, units = c("cm"))
+```
+
 
 ```{r}
 auxctime %>%
@@ -629,47 +592,322 @@ setwd("~/Documents/GitHub/composition/plots/") # Set the path
 ggsave("timee3.png", plot = last_plot(), width = 10, height = 8, units = c("cm"))
 ```
 
-# PLOTS REVIEW
+#### Baseline-corrected plots / Individual
+```{r}
+aux <- dctime %>%
+  ungroup() %>%
+  filter(atttrial == 1) %>%
+  filter(phase == "test")
 
-## Raw looking times
+l = nrow(aux)
+
+auxctime <- dctime %>%
+  filter(atttrial == 1) %>%
+  filter(phase == "test") %>%
+  #mutate(samplegroup = rep(1:130,each=3,l/390))%>%
+  mutate(sumaoi=tghit+dtnumhit+dtkindhit+dtkunrelatedhit) %>%
+  mutate(ptg = tghit/sumaoi) %>%
+  mutate(pnum = dtnumhit/sumaoi) %>%
+  mutate(pkind = dtkindhit/sumaoi) %>%
+  mutate(punrel = dtkunrelatedhit/sumaoi) %>%
+  mutate(corrtg = ptg-ptg_pretest) %>%
+  mutate(corrnum = pnum-pnum_pretest) %>%
+  mutate(corrkind = pkind-pkind_pretest) %>%
+  mutate(corrunrel = punrel-punrel_pretest) %>%
+  group_by(experiment,kindknower,ID,sample) %>%
+  summarise(tcorrptl = mean(corrtg,na.rm=T),
+            tcorrn = mean(corrnum,na.rm=T),
+            tcorrk = mean(corrkind,na.rm=T),
+            tcorru = mean(corrunrel,na.rm=T)) %>%
+  gather(key="aoi",value = "corr",c("tcorrptl","tcorrn","tcorrk","tcorru")) %>%
+  mutate(aoi = factor(aoi, levels = c("tcorrptl","tcorrn","tcorrk","tcorru"))) 
+```
+### AOI visits
+cbp1 <- c("#CC79A7", "#E69F00", "#0072B2", "#999999"
+
+```{r warning=FALSE}
+aux %>%
+  filter(kindknower == 1) %>%
+  #filter(ID == 14) %>%
+  filter(phase == "test") %>%
+  filter(experiment == "Experiment 2") %>%
+  ggplot(aes(x=sample,y=tghit)) +
+  theme_pubr() +
+  theme(
+    legend.position = "bottom",
+    axis.ticks.y = element_blank(),
+    axis.text.y = element_blank(),
+      axis.title = element_blank()
+  ) +
+  geom_line(color = "#CC79A7", size = 3) +
+  geom_line(aes(y=dtnumhit), color = "#E69F00", size = 3) +
+  geom_line(aes(y=dtkindhit), color = "#0072B2", size = 3) +
+  geom_line(aes(y=dtkunrelatedhit), color = "gray", size = 3) +
+  facet_grid(trial ~ ID) +
+  ylim(.9,1.1)
+```
+
+%>%
+  ggplot(aes(x=sample,y=tghit)) +
+  theme_pubr() +
+  theme(
+    legend.position = "bottom",
+    axis.ticks.y = element_blank()
+  ) +
+  geom_line(color = "#CC79A7", size = 3) +
+  geom_line(aes(y=dtnumhit), color = "blue", size = 3) +
+  geom_line(aes(y=dtkindhit), color = "yellow", size = 3) +
+  geom_line(aes(y=dtkunrelatedhit), color = "green", size = 3) +
+  facet_grid(trial ~ ID) +
+  ylim(.9,4.1)
 
 ```{r}
-resultsrawcompose <- dcompose %>%
-  group_by(experiment,ID,trial,phase,targetnumeral,attpretest,atttest,atttrial) %>%
+aux %>%
+  filter(kindknower == 1) %>%
+  #filter(ID == 1) %>%
+  filter(phase == "test") %>%
+  filter(experiment == "Experiment 2") %>%
+  group_by(ID,sample) %>%
+  mutate(stghit = sum(tghit,na.rm = T)/sum(tghit,dtnumhit,dtkindhit,dtkunrelatedhit,na.rm=T)) %>%
+  group_by(ID,sample) %>%
+  summarise(mtglook = mean(stghit, na.rm = T)) %>%
+  distinct(mtglook)
+```
+
+```{r}
+auxcomp <- aux %>%
+  filter(kindknower == 1) %>%
+  #filter(ID == 1) %>%
+  filter(phase == "test") %>%
+  filter(experiment == "Experiment 2") %>%
+  group_by(ID,sample) %>%
+  mutate(stghit = sum(tghit,na.rm = T)/sum(tghit,dtnumhit,dtkindhit,dtkunrelatedhit,na.rm=T)) %>%
+  group_by(ID,sample) %>%
+  summarise(mtglook = mean(stghit, na.rm = T))
+```
+%>%
+  ggplot(aes(x=sample,y=ID_Number,fill=as.factor(mtglook))) +
+    theme_pubr() +
+     theme(
+      axis.ticks.y = element_blank()
+    ) +
+  geom_tile() + 
+  scale_fill_manual(values = c("1"= "#6c294e",
+                               "0.75" = "#b34481",
+                               "0.67" = "#c15d94",
+                               "0.5"= "#cc79a7",
+                               "0.33" = "#dca4c3",
+                               "0.25" = "gold",
+                               "0" = "#fff09d",
+                               "NaN" = "white"))
+
+```{r}
+b <- aux %>%
+  filter(kindknower == 1) %>%
+  #filter(ID == 4) %>%
+  filter(phase == "test") %>%
+  filter(experiment == "Experiment 2") %>%
+  group_by(ID,sample) %>%
+  mutate(stghit = sum(dtkindhit,na.rm = T)/sum(tghit,dtnumhit,dtkindhit,dtkunrelatedhit,na.rm=T)) %>%
+  group_by(ID,sample) %>%
+  summarise(mtglook = mean(stghit, na.rm = T)) %>%
+  #group_by(sample) %>%
+  #mutate(mtglook = mean(mtglook, na.rm = T)) %>%
+  mutate(mtglook = round(mtglook,2)) %>%
+  ungroup() %>%
+  mutate(ID_Number = dense_rank(ID)) %>%
+  ggplot(aes(x=sample,y=ID_Number,fill=as.factor(mtglook))) +
+    theme_pubr() +
+     theme(
+      axis.ticks.y = element_blank(),
+      axis.text.y = element_blank(),
+      axis.title = element_blank()
+    ) +
+  geom_tile() + 
+  scale_fill_manual(values = c("1"= "#6c294e",
+                               "0.75" = "#b34481",
+                               "0.67" = "#c15d94",
+                               "0.5"= "#cc79a7",
+                               "0.33" = "#dca4c3",
+                               "0.25" = "gray60",
+                               "0" = "gray90",
+                               "NaN" = "white"))
+b
+```
+
+```{r}
+ggarrange(b,a,ncol = 1)
+```
+
+```{r}
+setwd("~/Documents/GitHub/composition/plots/") # Set the path
+ggsave("timee3.png", plot = last_plot(), width = 20, height = 8, units = c("cm"))
+```
+
+
+```{r}
+aux %>%
+  filter(kindknower == 1) %>%
+  #filter(ID == 1) %>%
+  filter(phase == "test") %>%
+  filter(experiment == "Experiment 2") %>%
+  group_by(ID,sample,trial) %>%
+  mutate(stghit = sum(tghit)/sum(tghit,dtnumhit,dtkindhit,dtkunrelatedhit)) %>%
+  ggplot(aes(x=sample,y=ID,fill=as.factor(stghit))) +
+    theme_pubr() +
+     theme(
+      axis.ticks.y = element_blank()
+    ) +
+  geom_tile() + #color="white",size=.25
+  scale_fill_manual(values=rev(c("white","#d53e4f", "#f46d43", "#fdae61", "#fee08b", "#e6f598", "#abdda4", "#ddf1da")), labels = c("1","0.75","0.5","0.25"))
+```
+
+
+
+```{r}
+auxctime %>%
+  filter(experiment == "Experiment 2") %>%
+  filter(kindknower == 1) %>%
+  #filter(ID == 1) %>%
+  ggplot(aes(x=sample,y=corr,color=aoi)) +
+  theme_pubr() +
+  theme(legend.position = "bottom",
+        title = element_text(size = 16),
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_blank()) +
+  geom_vline(xintercept = 30, size=.15, color="black") +
+  geom_vline(xintercept = 240/390*130, size=.15, color="black") +
+  geom_hline(yintercept = 0, size=.15, color="black") +
+  #geom_errorbar(aes(ymin = mean-se, ymax = mean+se),alpha=.25) +
+  geom_line() +
+  ylim(-.56,.56) +
+  xlab("Time (seconds)") +
+  #scale_x_continuous(
+  #  breaks = c(1,61/390*130,121/390*130,181/390*130,241/390*130,301/390*130,360/390*130),
+  #                   labels = c("0","1", "2", "3", "4", "5","6")) +
+  scale_colour_manual(values=cbp2) +
+  facet_wrap(. ~ ID)
+
+#setwd("~/Documents/GitHub/composition/plots/") # Set the path
+#ggsave("timee2.png", plot = last_plot(), width = 10, height = 8, units = c("cm"))
+```
+
+
+
+```{r}
+auxctime %>%
+  filter(experiment == "Experiment 3") %>%
+  filter(kindknower == 1) %>%
+  ggplot(aes(x=samplegroup,y=mean,color=aoi)) +
+  theme_pubr() +
+  theme(legend.position = "none",
+        title = element_text(size = 16),
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_blank()) +
+  geom_vline(xintercept = 30, size=.15, color="black") +
+  geom_vline(xintercept = 240/390*130, size=.15, color="black") +
+  geom_hline(yintercept = 0, size=.15, color="black") +
+  geom_errorbar(aes(ymin = mean-se, ymax = mean+se),alpha=.25) +
+  geom_line() +
+  ylim(-.56,.56) +
+  xlab("Time (seconds)") +
+  scale_x_continuous(
+    breaks = c(1,61/390*130,121/390*130,181/390*130,241/390*130,301/390*130,360/390*130),
+                     labels = c("0","1", "2", "3", "4", "5","6")) +
+  scale_colour_manual(values=cbp2)
+
+setwd("~/Documents/GitHub/composition/plots/") # Set the path
+ggsave("timee3.png", plot = last_plot(), width = 10, height = 8, units = c("cm"))
+```
+
+
+
+# REVIEW: RAW LTimes
+
+```{r}
+rawdata <- dcompose %>%
+  filter(validTrial == 1) %>%
+  group_by(experiment,ID,trial,phase,targetnumeral) %>%
   summarise(sumtg = sum(tghit,na.rm=T)*1000/60/1000,
             sumdtnum = sum(dtnumhit,na.rm=T)*1000/60/1000,
             sumdtkind = sum(dtkindhit,na.rm=T)*1000/60/1000,
             sumdtunrel = sum(dtkunrelatedhit,na.rm=T)*1000/60/1000,
             sumct = sum(centerhit,na.rm=T))%>%
-  select(ID,trial,phase,targetnumeral,sumtg,sumdtnum,sumdtkind,sumdtunrel,
-         attpretest,atttest,atttrial)
+  select(ID,trial,phase,targetnumeral,sumtg,sumdtnum,sumdtkind,sumdtunrel)
 ```
 
 ```{r}
 # Combine w/ kind info
-resultsrawcombined <- merge(resultsrawcompose,resultskindindm,by=c("experiment","ID"))
+aux <- merge(rawdata,resultskindindm,by=c("experiment","ID")) %>%
+  filter(kindknower == 1) %>%
+  mutate(sumtotal = sumtg+sumdtnum + sumdtkind + sumdtunrel)
+
+View(aux)
 ```
 
 ```{r}
-aux <- resultsrawcombined %>%
+aux %>%
   filter(kindknower == 1) %>%
-  filter(atttrial == 1) %>%
   filter(experiment == "Experiment 2") %>%
-  group_by(ID,phase,targetnumeral) %>%
+  mutate(phase = recode(phase, "pretest" = "baseline", "test" = "response")) %>%
+  group_by(ID,phase) %>%
+  summarise(msumtg = mean(sumtg,na.rm=T),
+            msumdtnum = mean(sumdtnum,na.rm=T),
+            msumdtkind = mean(sumdtkind,na.rm=T),
+            msumdtunrel = mean(sumdtunrel,na.rm=T)) %>%
+  group_by(phase) %>%
+  summarise(tg = mean(msumtg),
+            num = mean(msumdtnum),
+            kind = mean(msumdtkind),
+            unrel = mean(msumdtunrel)) %>%
+  mutate(pkind = kind/(tg+num+kind+unrel),
+         pnum = num/(tg+num+kind+unrel))
+```
+
+
+## by Referent
+
+```{r}
+e2b <- aux %>%
+  filter(kindknower == 1) %>%
+  filter(experiment == "Experiment 2") %>%
+  mutate(phase = recode(phase, "pretest" = "baseline", "test" = "response")) %>%
+  group_by(ID,phase) %>%
   summarise(msumtg = mean(sumtg,na.rm=T),
             msumdtnum = mean(sumdtnum,na.rm=T),
             msumdtkind = mean(sumdtkind,na.rm=T),
             msumdtunrel = mean(sumdtunrel,na.rm=T),
             n()) %>%
-  gather(key="aoi",value="value",c("msumtg","msumdtnum","msumdtkind","msumdtunrel")) %>%
-  mutate(aoi = factor(aoi, levels = c("msumtg","msumdtnum","msumdtkind","msumdtunrel")))
-```
+  gather(key="aoi",value="value",c("msumtg","msumdtkind","msumdtnum","msumdtunrel")) %>%
+  mutate(aoi = factor(aoi, levels = c("msumtg","msumdtkind","msumdtnum","msumdtunrel"))) %>%
+  ggplot(aes(x = as.factor(phase), y = value, fill = aoi, color = aoi)) +
+  theme_pubr() +
+  theme(legend.position = "none",
+        axis.title = element_blank(),
+        axis.text.y = element_text(size = 16),
+        axis.text.x = element_text(size = 12),
+        title = element_text(size = 18),
+        panel.background = element_rect(fill = 'white')) +
+  geom_jitter(position=position_jitterdodge(.35), size = 1, alpha = .25) +
+  stat_summary(fun.y = mean, na.rm = TRUE,
+               geom = "point",
+               #color = "gray40", 
+               size = 2, shape = "circle",position=position_dodge(width = .75)) +
+  stat_summary(fun.data = mean_cl_normal, na.rm = TRUE,
+               #color = "gray40", 
+               size = .5, position=position_dodge(width = .75),geom = "errorbar", width = 0) +
+  scale_color_manual(values=cbp1) +
+  scale_fill_manual(values=cbp1) +
+  ylim(0,3.15) +
+  ggtitle("Experiment 2")
 
-```{r}
-resultsrawcombined %>%
-  filter(kindknower == 1) %>%
-  filter(atttrial == 1) %>%
-  filter(experiment == "Experiment 2") %>%
+e3b <- aux %>%
+  filter(experiment == "Experiment 3") %>%
+  mutate(phase = recode(phase, "pretest" = "baseline", "test" = "response")) %>%
   group_by(ID,phase) %>%
   summarise(msumtg = mean(sumtg,na.rm=T),
             msumdtnum = mean(sumdtnum,na.rm=T),
@@ -680,10 +918,92 @@ resultsrawcombined %>%
   mutate(aoi = factor(aoi, levels = c("msumtg","msumdtnum","msumdtkind","msumdtunrel"))) %>%
   ggplot(aes(x = as.factor(phase), y = value, fill = aoi, color = aoi)) +
   theme_pubr() +
-  theme(legend.position = "top") +
-  geom_violin(data = aux, aes(x = phase, y = value, fill = targetnumeral),
-              size = .15, alpha = .15) + 
-  geom_jitter(position=position_jitterdodge(.25), size = .75, alpha = .85) +
+  theme(legend.position = "none",
+        axis.title = element_blank(),
+        axis.text.y = element_text(size = 16),
+        axis.text.x = element_text(size = 12),
+        title = element_text(size = 18),
+        panel.background = element_rect(fill = 'white')) +
+  geom_jitter(position=position_jitterdodge(.35), size = 1, alpha = .25) +
+  stat_summary(fun.y = mean, na.rm = TRUE,
+               geom = "point",
+               #color = "gray40", 
+               size = 2, shape = "circle",position=position_dodge(width = .75)) +
+  stat_summary(fun.data = mean_cl_normal, na.rm = TRUE,
+               #color = "gray40", 
+               size = .5, position=position_dodge(width = .75),geom = "errorbar", width = 0) +
+  scale_color_manual(values=cbp1) +
+  scale_fill_manual(values=cbp1) +
+  ylim(0,3.15) +
+  ggtitle("Experiment 3")
+
+```
+
+```{r}
+  ggarrange(e2b,e2b,e3b, nrow = 1, widths = c(1,1.5,1.5))
+```
+
+```{r}
+setwd(pathplots)
+ggsave("baseline_raw_byaoi.png", plot = last_plot(), width = 20, height = 8, units = c("cm"))
+```
+
+```{r}
+aux %>%
+  ungroup() %>%
+  mutate(ptg = sumtg/(sumtg + sumdtnum + sumdtkind + sumdtunrel)) %>%
+  filter(ID == 1) %>%
+  group_by(experiment,ID,phase) %>%
+  mutate(mptg = mean(ptg))
+```
+
+
+#### By number
+
+```{r}
+aux <- dnumber %>%
+  group_by(experiment,ID,trial,phase,attpretest,atttest,atttrial) %>%
+  summarise(sumsingle = sum(single,na.rm=T)*1000/60/1000,
+            sumpair = sum(pair,na.rm=T)*1000/60/1000)%>%
+  select(ID,trial,phase,sumsingle,sumpair,
+         attpretest,atttest,atttrial)
+```
+
+```{r}
+# Combine w/ kind info
+resultsnumberplot <- merge(aux,resultskindindm,by=c("experiment","ID"))
+```
+
+```{r}
+resultsnumberplot %>%
+  filter(kindknower == 1) %>%
+  filter(atttrial == 1) %>%
+  filter(experiment == "Experiment 3") %>%
+  group_by(ID,phase) %>%
+  summarise(msumsingle = mean(sumsingle,na.rm=T),
+            msumpair = mean(sumpair,na.rm=T),
+            n()) 
+```
+
+ˆ
+
+```{r}
+e2rc <- resultsnumberplot %>%
+  filter(kindknower == 1) %>%
+  filter(atttrial == 1) %>%
+  filter(experiment == "Experiment 2") %>%
+  group_by(ID,phase) %>%
+  summarise(msumsingle = mean(sumsingle,na.rm=T),
+            msumpair = mean(sumpair,na.rm=T),
+            n()) %>%
+  gather(key="numeral",value="value",c("msumsingle","msumpair")) %>%
+  mutate(aoi = factor(numeral, levels = c("msumsingle","msumpair"))) %>%
+  ggplot(aes(x = as.factor(phase), y = value, fill = numeral, color = numeral)) +
+  theme_pubr() +
+  theme(legend.position = "none",
+        axis.title = element_blank(),
+        axis.text = element_text(size = 12)) +
+  geom_jitter(position=position_jitterdodge(.2), size = .96, alpha = .65) +
   stat_summary(fun.y = mean, na.rm = TRUE,
                geom = "point",
                color = "black", 
@@ -691,96 +1011,166 @@ resultsrawcombined %>%
   stat_summary(fun.data = mean_cl_normal, na.rm = TRUE,
                color = "black", 
                size = .5, position=position_dodge(width = .75),geom = "errorbar", width = 0) +
-  scale_color_manual(values=cbp1) +
-  scale_fill_manual(values=cbp1) +
-  ylim(0,3.15) +
-  labs(title = "Experiment 3", subtitle = "Raw looking times")
+  scale_color_manual(values=c("red3","purple")) +
+  ylim(0,3.15) + 
+  ggtitle("Experiment 2")
 
+e3rc <- resultsnumberplot %>%
+  filter(kindknower == 1) %>%
+  filter(atttrial == 1) %>%
+  filter(experiment == "Experiment 3") %>%
+  group_by(ID,phase) %>%
+  summarise(msumsingle = mean(sumsingle,na.rm=T),
+            msumpair = mean(sumpair,na.rm=T),
+            n()) %>%
+  gather(key="numeral",value="value",c("msumsingle","msumpair")) %>%
+  mutate(aoi = factor(numeral, levels = c("msumsingle","msumpair"))) %>%
+  ggplot(aes(x = as.factor(phase), y = value, fill = numeral, color = numeral)) +
+  theme_pubr() +
+  theme(legend.position = "none",
+        axis.title = element_blank(),
+        axis.text = element_text(size = 12),
+        title = element_text(size = 14)) +
+  geom_jitter(position=position_jitterdodge(.2), size = .96, alpha = .65) +
+  stat_summary(fun.y = mean, na.rm = TRUE,
+               geom = "point",
+               color = "black", 
+               size = 2, shape = "circle",position=position_dodge(width = .75)) +
+  stat_summary(fun.data = mean_cl_normal, na.rm = TRUE,
+               color = "black", 
+               size = .5, position=position_dodge(width = .75),geom = "errorbar", width = 0) +
+  scale_color_manual(values=c("red3","purple")) +
+  ylim(0,3.15) + 
+  ggtitle("Experiment 3")
 ```
 
 
+#### Combine plots
 
 ```{r}
-setwd(pathplots) 
-ggsave("rawe2.png", plot = last_plot(), width = 10, height = 10, units = c("cm"))
+  ggarrange(e1b,e2b,e3b, nrow = 1, widths = c(1,1.5,1.5))
 ```
 
+```{r}
+setwd(pathplots)
+ggsave("baseline_raw_byaoi.png", plot = last_plot(), width = 20, height = 8, units = c("cm"))
+```
 
+```{r}
+ggarrange(e1rc,e2rc,e3rc, nrow = 1)
+#annotate_figure(figure, top = text_grob("Raw looking time split by cardinality"))
+```
+
+ 
+```{r}
+setwd(pathplots)
+ggsave("rawe3.png", plot = last_plot(), width = 15, height = 8, units = c("cm"))
+```
 
 ## corrpl
 
 ```{r}
-resultscombinedindm %>%
+plotcorr <- resultscomposeAVE %>%
   gather(key="aoi",value="value",c("mpretg","mprenum","mprekind","mpreun",
                                      "mtesttg","mtestnum","mtestkind","mtestun",
                                    "mcorrtg","mcorrnum","mcorrkind","mcorrun")) %>%
   select(experiment, ID, kindknower, aoi, value) %>%
   mutate(measure = case_when(
-    str_detect(aoi, "pre") ~ "Pretest",
-    str_detect(aoi, "test") ~ "Test",
+    str_detect(aoi, "pre") ~ "baseline",
+    str_detect(aoi, "test") ~ "response",
     str_detect(aoi, "corr") ~ "Baseline corrected")) %>%
-  mutate(measure = factor(measure, levels = c("Pretest","Test","Baseline corrected"))) %>%
+  mutate(measure = factor(measure, levels = c("baseline","response","Baseline corrected"))) %>%
   mutate(aoi = case_when(
     str_detect(aoi, "tg") ~ "Target",
     str_detect(aoi, "kind") ~ "Kind Distractor",
     str_detect(aoi, "num") ~ "Number Distractor",
     str_detect(aoi, "un") ~ "Unrelated/Mixed Distractor"
     )) %>%
-  filter(kindknower == 1) %>%
-  filter(experiment == "Experiment 3") %>%
-  ggplot(aes(x=as.factor(aoi),y=value,fill=as.factor(aoi))) + #, linetype = measure
-  theme_pubr() +
-  theme(legend.position = "bottom",
-        title = element_text(size = 16),
-        #axis.text.x = element_blank(),
-        axis.text.y = element_text(size = 12),
-        axis.title.x = element_blank(),
-        axis.title.y = element_blank()) +
-  geom_hline(yintercept = .25, size = .15, lty = "longdash", color = "gray") +
-  geom_hline(yintercept = 0, size = .15, lty = "longdash", color = "darkred") +
-  geom_boxplot(aes(alpha = as.factor(measure)),outlier.shape = NA, width = 1, color="gray10",
-              size =.35) +
-  geom_jitter(aes(color = aoi, shape = measure),position=position_jitterdodge(.5), size = .75) +
-  ylim(-.56,.56) +
-  #ylab("Mean Baseline-Corrected Proportion of Looking") +
-  stat_summary(aes(group = interaction(aoi, measure)), fun.y = mean, na.rm = TRUE,
-               geom = "point", color = "black", 
-               size = 2, shape = "diamond", position = position_dodge(width = 1)) +
-  labs(title = "Experiment 2", subtitle = "Composition test") +
-  scale_colour_manual(values=cbp1) +
-  scale_fill_manual(values=cbp2) +
-  scale_alpha_manual(values = c(0.15,0.35,75))
+  mutate(aoi = factor(aoi, levels = c("Target","Kind Distractor","Number Distractor","Unrelated/Mixed Distractor"))) 
 ```
 
+
 ```{r}
-resultscombinedindm %>%
-  gather(key="aoi",value="measure",c("mpretg","mprenum","mprekind","mpreun")) %>%
-  mutate(aoi = recode(aoi,"mcorrtg" = "aTG","mcorrkind" = "dtkind","mcorrnum" = "dtnum")) %>%
+plotcorr %>% 
   filter(kindknower == 1) %>%
+  group_by(experiment, kindknower,measure,aoi) %>%
+  summarise(mvalue = mean(value))
+```
+
+
+```{r}
+e2corr <- plotcorr %>%
+  filter(kindknower == 1) %>%
+  filter(measure != "Baseline corrected") %>%
   filter(experiment == "Experiment 2") %>%
-  ggplot(aes(x=as.factor(aoi),y=corr,fill=aoi)) +
+  ggplot(aes(x=as.factor(measure),y=value,fill=as.factor(aoi),color = as.factor(aoi))) +
   theme_pubr() +
   theme(legend.position = "none",
-        title = element_text(size = 16),
-        axis.text.x = element_blank(),
-        axis.text.y = element_text(size = 12),
-        axis.title.x = element_blank(),
-        axis.title.y = element_blank()) +
-  geom_hline(yintercept = 0.25, size = .5, lty = "longdash", color = "gray") +
-  geom_boxplot(outlier.shape = NA, alpha = .5, width = .3, color="gray10",size =.35) +
-  geom_jitter(aes(color = aoi),position=position_jitter(.15), size = .75) +
-  ylim(0,1) +
-  #ylab("Mean Baseline-Corrected Proportion of Looking") +
+        axis.title = element_blank(),
+        axis.text.y = element_text(size = 16),
+        axis.text.x = element_text(size = 12),
+        title = element_text(size = 10)) +
+  geom_jitter(position=position_jitterdodge(.35), size = .96, alpha = .25) +
   stat_summary(fun.y = mean, na.rm = TRUE,
-               geom = "point", color = "white", 
-               size = 4, shape = "diamond") +
-  labs(title = "Experiment 2", subtitle = "Composition test") +
-  scale_colour_manual(values=cbp1) +
-  scale_fill_manual(values=cbp1)
+               geom = "point",
+               #color = "black", 
+               size = 2, shape = "circle",position=position_dodge(width = .75)) +
+  stat_summary(fun.data = mean_cl_normal, na.rm = TRUE,
+               #color = "black", 
+               size = .65, position=position_dodge(width = .75),geom = "errorbar", width = 0) +
+  geom_hline(yintercept = 0.25, size = .25, lty = "longdash", color = "darkred") +
+  ylim(0,0.8) +
+  scale_colour_manual(values=cbp1)
+
+e3corr <- plotcorr %>%
+  filter(kindknower == 1) %>%
+  filter(measure != "Baseline corrected") %>%
+  filter(experiment == "Experiment 3") %>%
+  ggplot(aes(x=as.factor(measure),y=value,fill=as.factor(aoi),color = as.factor(aoi))) +
+  theme_pubr() +
+  theme(legend.position = "none",
+        axis.title = element_blank(),
+        axis.text.y = element_text(size = 16),
+        axis.text.x = element_text(size = 12),
+        title = element_text(size = 10)) +
+  geom_jitter(position=position_jitterdodge(.35), size = .96, alpha = .25) +
+  stat_summary(fun.data = mean_cl_normal, na.rm = TRUE,
+               #color = "black", 
+               size = .65, position=position_dodge(width = .75),geom = "errorbar", width = 0) +
+  stat_summary(fun.y = mean, na.rm = TRUE,
+               geom = "point",
+               #color = "black", 
+               size = 2, shape = "circle",position=position_dodge(width = .75)) +
+  geom_hline(yintercept = 0.25, size = .25, lty = "longdash", color = "darkred") +
+  ylim(0,0.8) +
+  scale_colour_manual(values=cbp1) 
+```
+
+
+```{r}
+plotcorr %>% 
+  filter(kindknower == 1) %>%
+  group_by(experiment, kindknower,measure,aoi) %>%
+  summarise(mvalue = mean(value))
 ```
 
 ```{r}
+ggarrange(e2b,e2corr, nrow = 2)
+```
 
+```{r}
+setwd(pathplots)
+ggsave("pl2.png", plot = last_plot(), width = 7.5, height = 15, units = c("cm"))
+```
+
+```{r}
+ggarrange(e3b,e3corr, nrow = 2)
+```
+
+
+```{r}
+setwd(pathplots)
+ggsave("pl3.png", plot = last_plot(), width = 7.5, height = 15, units = c("cm"))
 ```
 
 # SAVE
